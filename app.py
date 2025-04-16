@@ -1,123 +1,47 @@
 r"""29a41de6a866d56c36aba5159f45257c"""
 
+# Standard library imports
 import os
-from flask import (
-    Flask,
-    render_template,
-    send_file,
-    request,
-    jsonify,
-    redirect,
-    url_for,
-    flash,
-    session,
-)
 import re
-from flask_login import (
-    UserMixin,
-    login_user,
-    login_required,
-    logout_user,
-    current_user,
-)
-from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
-import calendar
-from functools import wraps
-import logging
-from sqlalchemy import func, or_, and_
-import secrets
-from flask_mail import Message
-from flask_migrate import Migrate
-import ssl
-import requests
-from sqlalchemy import inspect, text
-from oidc_auth import setup_oidc_config, register_oidc_routes
-from oidc_user import extend_user_model
-from datetime import datetime, timedelta
-from simplefin_client import SimpleFin
-from flask import session, request, jsonify, url_for, flash, redirect
-from datetime import datetime, timedelta
-import base64
-import pytz
-from config import get_config
-from extensions import db, login_manager, mail, migrate, scheduler
-import csv
-import re
-import io
 import json
-import uuid
-import base64
-import pytz
-import secrets
+import ssl
 import logging
-import hashlib
-import requests
+import secrets
 import calendar
-from functools import wraps
+import hashlib
+import base64
 from datetime import datetime, date, timedelta
+from functools import wraps
 
-import ssl
-import ssl
-
+# Third-party imports
+import pytz
+import requests
 from dotenv import load_dotenv
-from flask import Flask, render_template, send_file, request, jsonify, url_for, flash, redirect, session
-from flask_apscheduler import APScheduler
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+
+# Flask and extensions
+from flask import (
+    Flask, render_template, send_file, request, jsonify, 
+    redirect, url_for, flash, session
+)
+from flask_login import (
+    LoginManager, UserMixin, login_user, login_required, 
+    logout_user, current_user
+)
 from flask_mail import Mail, Message
 from flask_migrate import Migrate
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask_sqlalchemy import SQLAlchemy
+from flask_apscheduler import APScheduler
 from sqlalchemy import func, or_, and_, inspect, text
 
-from recurring_detection import detect_recurring_transactions, create_recurring_expense_from_detection
-from oidc_auth import setup_oidc_config, register_oidc_routes
-from oidc_user import extend_user_model
-from simplefin_client import SimpleFin
-
-from session_timeout import DemoTimeout, demo_time_limited
-
-from flask import (
-    Flask,
-    render_template,
-    send_file,
-    request,
-    jsonify,
-    redirect,
-    url_for,
-    flash,
-    session,
-)
-import re
-from flask_login import (
-    UserMixin,
-    login_user,
-    login_required,
-    logout_user,
-    current_user,
-)
-from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
-import calendar
-from functools import wraps
-import logging
-from sqlalchemy import func, or_, and_
-import secrets
-from flask_mail import Message
-from flask_migrate import Migrate
-import ssl
-import requests
-from sqlalchemy import inspect, text
-from oidc_auth import setup_oidc_config, register_oidc_routes
-from oidc_user import extend_user_model
-from datetime import datetime, timedelta
-from simplefin_client import SimpleFin
-from flask import session, request, jsonify, url_for, flash, redirect
-from datetime import datetime, timedelta
-import base64
-import pytz
+# Local application imports
 from config import get_config
 from extensions import db, login_manager, mail, migrate, scheduler
+from recurring_detection import detect_recurring_transactions, create_recurring_expense_from_detection
+from simplefin_client import SimpleFin
+from session_timeout import DemoTimeout, demo_time_limited
+from oidc_auth import setup_oidc_config, register_oidc_routes
+from oidc_user import extend_user_model
 
 # Development user credentials from environment
 DEV_USER_EMAIL = os.getenv('DEV_USER_EMAIL', 'dev@example.com')
