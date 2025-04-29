@@ -1,24 +1,32 @@
 import os
+
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
 class Config:
-    SECRET_KEY = os.getenv("SECRET_KEY", "fallback_secret_key_change_in_production")
+    SECRET_KEY = os.getenv(
+        "SECRET_KEY", "fallback_secret_key_change_in_production"
+    )
     SQLALCHEMY_DATABASE_URI = os.getenv(
         "SQLALCHEMY_DATABASE_URI", "sqlite:///instance/expenses.db"
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     DEVELOPMENT_MODE = os.getenv("DEVELOPMENT_MODE", "True").lower() == "true"
-    DISABLE_SIGNUPS = os.environ.get("DISABLE_SIGNUPS", "False").lower() == "true"
-    LOCAL_LOGIN_DISABLE = os.getenv("LOCAL_LOGIN_DISABLE", "False").lower() == "true"
+    DISABLE_SIGNUPS = (
+        os.environ.get("DISABLE_SIGNUPS", "False").lower() == "true"
+    )
+    LOCAL_LOGIN_DISABLE = (
+        os.getenv("LOCAL_LOGIN_DISABLE", "False").lower() == "true"
+    )
 
     # SimpleFin settings
     SIMPLEFIN_ENABLED = os.getenv("SIMPLEFIN_ENABLED", "True").lower() == "true"
     SIMPLEFIN_SETUP_TOKEN_URL = os.getenv(
-        "SIMPLEFIN_SETUP_TOKEN_URL", "https://beta-bridge.simplefin.org/setup-token"
+        "SIMPLEFIN_SETUP_TOKEN_URL",
+        "https://beta-bridge.simplefin.org/setup-token",
     )
 
     # Email settings
@@ -28,7 +36,9 @@ class Config:
     MAIL_USE_SSL = os.getenv("MAIL_USE_SSL", "False").lower() == "true"
     MAIL_USERNAME = os.getenv("MAIL_USERNAME")
     MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
-    MAIL_DEFAULT_SENDER = os.getenv("MAIL_DEFAULT_SENDER", os.getenv("MAIL_USERNAME"))
+    MAIL_DEFAULT_SENDER = os.getenv(
+        "MAIL_DEFAULT_SENDER", os.getenv("MAIL_USERNAME")
+    )
 
     # Development credentials
     DEV_USER_EMAIL = os.getenv("DEV_USER_EMAIL", "dev@example.com")
@@ -64,6 +74,7 @@ class TestingConfig(Config):
 
     TESTING = True
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
+
 
 config_by_name = {
     "development": DevelopmentConfig,
