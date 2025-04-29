@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm.session import Session
 
 import models  # noqa: F401  # Required for model discovery
+from gocardless_client import GoCardlessClient
 from models.base import Base
 
 """
@@ -33,5 +34,6 @@ migrate = Migrate()
 login_manager = LoginManager()
 mail = Mail()
 scheduler = APScheduler()
+gocardless_client = GoCardlessClient()
 
 login_manager.login_view = "auth.login"
