@@ -44,11 +44,11 @@ class Account(Base):
     )
     # Relationships
     user: Mapped[Optional["User"]] = relationship(
-        "User", backref=backref("accounts", lazy=True), default=None
+        "User", backref=backref("accounts", lazy=True), init=False
     )
 
     currency: Mapped[Optional["Currency"]] = relationship(
-        "Currency", backref=backref("accounts", lazy=True), default=None
+        "Currency", backref=backref("accounts", lazy=True), init=False
     )
 
     external_id: Mapped[Optional[str]] = mapped_column(

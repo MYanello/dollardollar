@@ -30,7 +30,7 @@ class Category(Base):
 
     # Relationships
     user: Mapped[Optional["User"]] = relationship(
-        "User", backref=backref("categories", lazy=True), default=None
+        "User", backref=backref("categories", lazy=True), init=False
     )
     parent_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("categories.id"), default=None
@@ -39,10 +39,10 @@ class Category(Base):
         "Category",
         remote_side=[id],
         backref=backref("subcategories", lazy=True),
-        default=None,
+        init=False,
     )
     expenses: Mapped[Optional["Expense"]] = relationship(
-        "Expense", backref=backref("category", lazy=True), default=None
+        "Expense", backref=backref("category", lazy=True), init=False
     )
 
     icon: Mapped[str] = mapped_column(
@@ -81,10 +81,10 @@ class CategorySplit(Base):
     expense: Mapped[Optional["Expense"]] = relationship(
         "Expense",
         backref=backref("category_splits", cascade="all, delete-orphan"),
-        default=None,
+        init=False,
     )
     category: Mapped[Optional["Category"]] = relationship(
-        "Category", backref=backref("splits", lazy=True), default=None
+        "Category", backref=backref("splits", lazy=True), init=False
     )
 
 
@@ -103,10 +103,10 @@ class CategoryMapping(Base):
 
     # Relationships
     user: Mapped[Optional["User"]] = relationship(
-        "User", backref=backref("category_mappings", lazy=True), default=None
+        "User", backref=backref("category_mappings", lazy=True), init=False
     )
     category: Mapped[Optional["Category"]] = relationship(
-        "Category", backref=backref("mappings", lazy=True), default=None
+        "Category", backref=backref("mappings", lazy=True), init=False
     )
 
     is_regex: Mapped[bool] = mapped_column(

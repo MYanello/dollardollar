@@ -48,10 +48,10 @@ class Budget(Base):
 
     # Relationships
     user: Mapped[Optional["User"]] = relationship(
-        "User", backref=backref("budgets", lazy=True), default=None
+        "User", backref=backref("budgets", lazy=True), init=False
     )
     category: Mapped[Optional["Category"]] = relationship(
-        "Category", backref=backref("budgets", lazy=True), default=None
+        "Category", backref=backref("budgets", lazy=True), init=False
     )
 
     transaction_types: Mapped[str] = mapped_column(

@@ -13,9 +13,8 @@ from sqlalchemy.orm import (
 )
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from models import Group
-
 from .base import Base
+from .group import Group
 
 if TYPE_CHECKING:
     from models import Currency, Expense, Group

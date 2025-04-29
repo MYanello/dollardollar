@@ -10,12 +10,14 @@ from sqlalchemy.orm import (
     relationship,
 )
 
+from database import db
 from tables import expense_tags
 
 from .base import Base
+from .user import User
 
 if TYPE_CHECKING:
-    from models import Account, Currency, Tag, User
+    from models import Account, Currency, Tag
 
 
 class Expense(Base):
@@ -145,7 +147,7 @@ class Expense(Base):
         :rtype: dict
         """
         # Get the user who paid
-        payer: User | None = User.query.filter_by(id=self.paid_by).first()
+        payer: User | None = db.session.get(User, self.paid_by)
         if not payer:
             return {}
         payer = cast(User, payer)
@@ -157,7 +159,11 @@ class Expense(Base):
         split_users = []
 
         for user_id in split_with_ids:
-            user = User.query.filter_by(id=user_id.strip()).first()
+            user: User | None = (
+                db.session.query(User)
+                .filter(User.id == user_id.strip())
+                .first()
+            )
             if user:
                 split_users.append(
                     {"id": user.id, "name": user.name, "email": user.id}
