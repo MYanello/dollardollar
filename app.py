@@ -19,8 +19,8 @@ from simplefin_client import SimpleFin
 import base64
 import pytz
 from config import get_config
-from extensions import db, login_manager, mail, migrate, scheduler
-import extensions
+from extensions import login_manager, mail, migrate, scheduler
+import re
 import json
 from datetime import datetime, timedelta
 
@@ -30,7 +30,10 @@ from sqlalchemy import func, or_, and_, inspect, text
 from routes import register_blueprints
 from session_timeout import DemoTimeout
 
-from models import Account, Budget, Category, CategoryMapping, CategorySplit, Currency, Expense, Group, RecurringExpense, Settlement, User
+from models import Account, Budget, Category, CategoryMapping, CategorySplit, Currency, Expense, Group, IgnoredRecurringPattern, RecurringExpense, Settlement, Tag, User
+from tables import group_users
+
+from util import auto_categorize_transaction, check_db_structure, detect_internal_transfer, get_category_id
 
 # Development user credentials from environment
 DEV_USER_EMAIL = os.getenv('DEV_USER_EMAIL', 'dev@example.com')
@@ -58,7 +61,9 @@ def create_app(config_object=None):
     login_manager.init_app(app)
     mail.init_app(app)
     scheduler.init_app(app)
-    
+
+    check_db_structure(app)
+
     return app
 
 app = create_app()
@@ -277,55 +282,6 @@ def calculate_asset_debt_trends(current_user):
     }
 
 
-def detect_internal_transfer(description, amount, account_id=None):
-    """
-    Detect if a transaction appears to be an internal transfer between accounts
-    Returns a tuple of (is_transfer, source_account_id, destination_account_id)
-    """
-    # Default return values
-    is_transfer = False
-    source_account_id = account_id
-    destination_account_id = None
-    
-    # Skip if no description or account
-    if not description or not account_id:
-        return is_transfer, source_account_id, destination_account_id
-    
-    # Normalize description for easier matching
-    desc_lower = description.lower()
-    
-    # Common transfer-related keywords
-    transfer_keywords = [
-        'transfer', 'xfer', 'move', 'moved to', 'sent to', 'to account', 
-        'from account', 'between accounts', 'internal', 'account to account',
-        'trx to', 'trx from', 'trans to', 'trans from','ACH Withdrawal',
-        'Robinhood', 'BK OF AMER VISA ONLINE PMT','Payment Thank You',
-
-
-    ]
-    
-    # Check for transfer keywords in description
-    if any(keyword in desc_lower for keyword in transfer_keywords):
-        is_transfer = True
-        
-        # Try to identify the destination account
-        # Get all user accounts
-        user_accounts = Account.query.filter_by(user_id=current_user.id).all()
-        
-        # Look for account names in the description
-        for account in user_accounts:
-            # Skip the source account
-            if account.id == account_id:
-                continue
-                
-            # Check if account name appears in the description
-            if account.name.lower() in desc_lower:
-                # This is likely the destination account
-                destination_account_id = account.id
-                break
-    
-    return is_transfer, source_account_id, destination_account_id
-
 # Update the determine_transaction_type function to detect internal transfers
 def determine_transaction_type(row, current_account_id=None):
     """
@@ -400,150 +356,554 @@ def determine_transaction_type(row, current_account_id=None):
         # If amount can't be parsed, default to expense
         return 'expense'
 
-def auto_categorize_transaction(description, user_id):
+
+
+def update_category_mappings(transaction_id, category_id, learn=False):
     """
-    Automatically categorize a transaction based on its description
-    Returns the best matching category ID or None if no match found
+    Update category mappings based on a manually categorized transaction
+    If learn=True, create a new mapping based on this categorization
+    """
+    transaction = Expense.query.get(transaction_id)
+    if not transaction or not category_id:
+        return False
+        
+    if learn:
+        # Extract a good keyword from the description
+        keyword = extract_keywords(transaction.description)
+        
+        # Check if a similar mapping already exists
+        existing = CategoryMapping.query.filter_by(
+            user_id=transaction.user_id,
+            keyword=keyword,
+            active=True
+        ).first()
+        
+        if existing:
+            # Update the existing mapping
+            existing.category_id = category_id
+            existing.match_count += 1
+            db.session.commit()
+        else:
+            # Create a new mapping
+            new_mapping = CategoryMapping(
+                user_id=transaction.user_id,
+                keyword=keyword,
+                category_id=category_id,
+                match_count=1
+            )
+            db.session.add(new_mapping)
+            db.session.commit()
+        
+        return True
+        
+    return False
+
+def extract_keywords(description):
+    """
+    Extract meaningful keywords from a transaction description
+    Returns the most significant word or phrase
     """
     if not description:
-        return None
+        return ""
         
-    # Standardize description - lowercase and remove extra spaces
-    description = description.strip().lower()
+    # Clean up description
+    clean_desc = description.strip().lower()
     
-    # Get all active category mappings for the user
-    mappings = CategoryMapping.query.filter_by(
-        user_id=user_id,
-        active=True
-    ).order_by(CategoryMapping.priority.desc(), CategoryMapping.match_count.desc()).all()
+    # Split into words
+    words = clean_desc.split()
     
-    # Keep track of matches and their scores
-    matches = []
+    # Remove common words that aren't useful for categorization
+    stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'on', 'in', 'with', 'for', 'to', 'from', 'by', 'at', 'of'}
+    filtered_words = [w for w in words if w not in stop_words and len(w) > 2]
     
-    # Check each mapping
-    for mapping in mappings:
-        matched = False
-        if mapping.is_regex:
-            # Use regex pattern matching
-            try:
-                import re
-                pattern = re.compile(mapping.keyword, re.IGNORECASE)
-                if pattern.search(description):
-                    matched = True
-            except:
-                # If regex is invalid, fall back to simple substring search
-                matched = mapping.keyword.lower() in description
-        else:
-            # Simple substring matching
-            matched = mapping.keyword.lower() in description
-            
-        if matched:
-            # Calculate match score based on:
-            # 1. Priority (user-defined importance)
-            # 2. Usage count (previous successful matches)
-            # 3. Keyword length (longer keywords are more specific)
-            # 4. Keyword position (earlier in the string is better)
-            score = (mapping.priority * 100) + (mapping.match_count * 10) + len(mapping.keyword)
-            
-            # Adjust score based on position (if simple keyword)
-            if not mapping.is_regex:
-                position = description.find(mapping.keyword.lower())
-                if position == 0:  # Matches at the start
-                    score += 50
-                elif position > 0:  # Adjust based on how early it appears
-                    score += max(0, 30 - position)
-                    
-            matches.append((mapping, score))
+    if not filtered_words:
+        # If no good words remain, use the longest word from the original
+        return max(words, key=len) if words else ""
     
-    # Sort matches by score, descending
-    matches.sort(key=lambda x: x[1], reverse=True)
-    
-    # If we have any matches, increment the match count for the winner and return its category ID
-    if matches:
-        best_mapping = matches[0][0]
-        best_mapping.match_count += 1
-        db.session.commit()
-        return best_mapping.category_id
-    
-    return None
+    # Use the longest remaining word as the keyword
+    # This is a simple approach - could be improved with more sophisticated NLP
+    return max(filtered_words, key=len)
 
 
-def get_category_id(category_name, description=None, user_id=None):
-    """Find, create, or auto-suggest a category based on name and description"""
-    # Clean the category name
-    category_name = category_name.strip() if category_name else ""
+def create_default_category_mappings(user_id):
+    """Create default category mappings for a new user"""
+    # Check if user already has any mappings
+    existing_mappings_count = CategoryMapping.query.filter_by(user_id=user_id).count()
     
-    # If we have a user ID and no category name but have a description
-    if user_id and not category_name and description:
-        # Try to auto-categorize based on description
-        auto_category_id = auto_categorize_transaction(description, user_id)
-        if auto_category_id:
-            return auto_category_id
+    # Only create defaults if user has no mappings
+    if existing_mappings_count > 0:
+        return
     
-    # If we have a category name, try to find it
-    if category_name:
-        # Try to find an exact match first
-        category = Category.query.filter(
-            Category.user_id == user_id if user_id else current_user.id,
-            func.lower(Category.name) == func.lower(category_name)
+    # Get user's categories to map to
+    # We'll need to find the appropriate category IDs for the current user
+    categories = {}
+    
+    # Find common top-level categories
+    for category_name in ["Food", "Transportation", "Housing", "Shopping", "Entertainment", "Health", "Personal", "Other"]:
+        category = Category.query.filter_by(
+            user_id=user_id,
+            name=category_name,
+            parent_id=None
         ).first()
         
         if category:
-            return category.id
-        
-        # Try to find a partial match in subcategories
-        subcategory = Category.query.filter(
-            Category.user_id == user_id if user_id else current_user.id,
-            Category.parent_id.isnot(None),
-            func.lower(Category.name).like(f"%{category_name.lower()}%")
-        ).first()
-        
-        if subcategory:
-            return subcategory.id
-        
-        # Try to find a partial match in parent categories
-        parent_category = Category.query.filter(
-            Category.user_id == user_id if user_id else current_user.id,
-            Category.parent_id.is_(None),
-            func.lower(Category.name).like(f"%{category_name.lower()}%")
-        ).first()
-        
-        if parent_category:
-            return parent_category.id
-        
-        # If auto-categorize is enabled, create a new category
-        if 'auto_categorize' in request.form:
-            # Find "Other" category as parent
-            other_category = Category.query.filter_by(
-                name='Other',
-                user_id=user_id if user_id else current_user.id,
-                is_system=True
-            ).first()
+            categories[category_name.lower()] = category.id
             
-            new_category = Category(
-                name=category_name[:50],  # Limit to 50 chars
-                icon='fa-tag',
-                color='#6c757d',
-                parent_id=other_category.id if other_category else None,
-                user_id=user_id if user_id else current_user.id
+            # Also get subcategories
+            for subcategory in category.subcategories:
+                categories[subcategory.name.lower()] = subcategory.id
+    
+    # If we couldn't find any categories, we can't create mappings
+    if not categories:
+        app.logger.warning(f"Could not create default category mappings for user {user_id}: no categories found")
+        return
+    
+    # Default mappings as (keyword, category_key, is_regex, priority)
+    default_mappings = [
+        # Food & Dining
+        ("grocery", "groceries", False, 5),
+        ("groceries", "groceries", False, 5),
+        ("supermarket", "groceries", False, 5),
+        ("walmart", "groceries", False, 3),
+        ("target", "groceries", False, 3),
+        ("costco", "groceries", False, 5),
+        ("safeway", "groceries", False, 5),
+        ("kroger", "groceries", False, 5),
+        ("aldi", "groceries", False, 5),
+        ("trader joe", "groceries", False, 5),
+        ("whole foods", "groceries", False, 5),
+        ("wegmans", "groceries", False, 5),
+        ("publix", "groceries", False, 5),
+        ("sprouts", "groceries", False, 5),
+        ("sams club", "groceries", False, 5),
+
+        # Restaurants
+        ("restaurant", "restaurants", False, 5),
+        ("dining", "restaurants", False, 5),
+        ("takeout", "restaurants", False, 5),
+        ("doordash", "restaurants", False, 5),
+        ("ubereats", "restaurants", False, 5),
+        ("grubhub", "restaurants", False, 5),
+        ("mcdonald", "restaurants", False, 5),
+        ("burger", "restaurants", False, 4),
+        ("pizza", "restaurants", False, 4),
+        ("chipotle", "restaurants", False, 5),
+        ("panera", "restaurants", False, 5),
+        ("kfc", "restaurants", False, 5),
+        ("wendy's", "restaurants", False, 5),
+        ("taco bell", "restaurants", False, 5),
+        ("chick-fil-a", "restaurants", False, 5),
+        ("five guys", "restaurants", False, 5),
+        ("ihop", "restaurants", False, 5),
+        ("denny's", "restaurants", False, 5),
+
+        # Coffee shops
+        ("starbucks", "coffee shops", False, 5),
+        ("coffee", "coffee shops", False, 4),
+        ("dunkin", "coffee shops", False, 5),
+        ("peet", "coffee shops", False, 5),
+        ("tim hortons", "coffee shops", False, 5),
+
+        # Gas & Transportation
+        ("gas station", "gas", False, 5),
+        ("gasoline", "gas", False, 5),
+        ("fuel", "gas", False, 5),
+        ("chevron", "gas", False, 5),
+        ("shell", "gas", False, 5),
+        ("exxon", "gas", False, 5),
+        ("tesla supercharger", "gas", False, 5),
+        ("ev charging", "gas", False, 5),
+
+        # Rideshare & Transit
+        ("uber", "rideshare", False, 5),
+        ("lyft", "rideshare", False, 5),
+        ("taxi", "rideshare", False, 5),
+        ("transit", "public transit", False, 5),
+        ("subway", "public transit", False, 5),
+        ("bus", "public transit", False, 5),
+        ("train", "public transit", False, 5),
+        ("amtrak", "public transit", False, 5),
+        ("greyhound", "public transit", False, 5),
+        ("parking", "transportation", False, 5),
+        ("toll", "transportation", False, 5),
+        ("bike share", "transportation", False, 5),
+        ("scooter rental", "transportation", False, 5),
+
+        # Housing & Utilities
+        ("rent", "rent/mortgage", False, 5),
+        ("mortgage", "rent/mortgage", False, 5),
+        ("airbnb", "rent/mortgage", False, 5),
+        ("vrbo", "rent/mortgage", False, 5),
+        ("water bill", "utilities", False, 5),
+        ("electric", "utilities", False, 5),
+        ("utility", "utilities", False, 5),
+        ("utilities", "utilities", False, 5),
+        ("internet", "utilities", False, 5),
+        ("Ngrid", "utilities", False, 5),
+        ("maintenance", "home maintenance", False, 4),
+        ("repair", "home maintenance", False, 4),
+        ("hvac", "home maintenance", False, 5),
+        ("pest control", "home maintenance", False, 5),
+        ("home security", "home maintenance", False, 5),
+        ("home depot", "home maintenance", False, 5),
+        ("lowe's", "home maintenance", False, 5),
+
+        # Shopping
+        ("amazon", "shopping", False, 5),
+        ("ebay", "shopping", False, 5),
+        ("etsy", "shopping", False, 5),
+        ("clothing", "clothing", False, 5),
+        ("apparel", "clothing", False, 5),
+        ("shoes", "clothing", False, 5),
+        ("electronics", "electronics", False, 5),
+        ("best buy", "electronics", False, 5),
+        ("apple", "electronics", False, 5),
+        ("microsoft", "electronics", False, 5),
+        ("furniture", "shopping", False, 5),
+        ("homegoods", "shopping", False, 5),
+        ("ikea", "shopping", False, 5),
+        ("tj maxx", "shopping", False, 5),
+        ("marshalls", "shopping", False, 5),
+        ("nordstrom", "shopping", False, 5),
+        ("macys", "shopping", False, 5),
+        ("zara", "shopping", False, 5),
+        ("uniqlo", "shopping", False, 5),
+        ("shein", "shopping", False, 5),
+
+        # Entertainment & Subscriptions
+        ("movie", "movies", False, 5),
+        ("cinema", "movies", False, 5),
+        ("theater", "movies", False, 5),
+        ("amc", "movies", False, 5),
+        ("regal", "movies", False, 5),
+        ("netflix", "subscriptions", False, 5),
+        ("hulu", "subscriptions", False, 5),
+        ("spotify", "subscriptions", False, 5),
+        ("apple music", "subscriptions", False, 5),
+        ("disney+", "subscriptions", False, 5),
+        ("hbo", "subscriptions", False, 5),
+        ("prime video", "subscriptions", False, 5),
+        ("paramount+", "subscriptions", False, 5),
+        ("game", "entertainment", False, 4),
+        ("playstation", "entertainment", False, 5),
+        ("xbox", "entertainment", False, 5),
+        ("nintendo", "entertainment", False, 5),
+        ("concert", "entertainment", False, 5),
+        ("festival", "entertainment", False, 5),
+        ("sports ticket", "entertainment", False, 5),
+
+        # Health & Wellness
+        ("gym", "health", False, 5),
+        ("fitness", "health", False, 5),
+        ("doctor", "health", False, 5),
+        ("dentist", "health", False, 5),
+        ("hospital", "health", False, 5),
+        ("pharmacy", "health", False, 5),
+        ("walgreens", "health", False, 5),
+        ("cvs", "health", False, 5),
+        ("rite aid", "health", False, 5),
+        ("vision", "health", False, 5),
+        ("glasses", "health", False, 5),
+        ("contacts", "health", False, 5),
+        ("insurance", "health", False, 5),
+    ]
+
+    
+    # Create the mappings
+    for keyword, category_key, is_regex, priority in default_mappings:
+        # Check if we have a matching category for this keyword
+        if category_key in categories:
+            category_id = categories[category_key]
+            
+            # Create the mapping
+            mapping = CategoryMapping(
+                user_id=user_id,
+                keyword=keyword,
+                category_id=category_id,
+                is_regex=is_regex,
+                priority=priority,
+                match_count=0,
+                active=True
             )
             
-            db.session.add(new_category)
-            db.session.flush()  # Get ID without committing
+            db.session.add(mapping)
+    
+    # Commit all mappings at once
+    try:
+        db.session.commit()
+        app.logger.info(f"Created default category mappings for user {user_id}")
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error creating default category mappings: {str(e)}")
+
+# Then modify the existing create_default_categories function to also create mappings:
+
+def create_default_categories(user_id):
+    """Create default expense categories for a new user"""
+    default_categories = [
+        # Housing
+        {"name": "Housing", "icon": "fa-home", "color": "#3498db", "subcategories": [
+            {"name": "Rent/Mortgage", "icon": "fa-building", "color": "#3498db"},
+            {"name": "Utilities", "icon": "fa-bolt", "color": "#3498db"},
+            {"name": "Home Maintenance", "icon": "fa-tools", "color": "#3498db"}
+        ]},
+        # Food
+        {"name": "Food", "icon": "fa-utensils", "color": "#e74c3c", "subcategories": [
+            {"name": "Groceries", "icon": "fa-shopping-basket", "color": "#e74c3c"},
+            {"name": "Restaurants", "icon": "fa-hamburger", "color": "#e74c3c"},
+            {"name": "Coffee Shops", "icon": "fa-coffee", "color": "#e74c3c"}
+        ]},
+        # Transportation
+        {"name": "Transportation", "icon": "fa-car", "color": "#2ecc71", "subcategories": [
+            {"name": "Gas", "icon": "fa-gas-pump", "color": "#2ecc71"},
+            {"name": "Public Transit", "icon": "fa-bus", "color": "#2ecc71"},
+            {"name": "Rideshare", "icon": "fa-taxi", "color": "#2ecc71"}
+        ]},
+        # Shopping
+        {"name": "Shopping", "icon": "fa-shopping-cart", "color": "#9b59b6", "subcategories": [
+            {"name": "Clothing", "icon": "fa-tshirt", "color": "#9b59b6"},
+            {"name": "Electronics", "icon": "fa-laptop", "color": "#9b59b6"},
+            {"name": "Gifts", "icon": "fa-gift", "color": "#9b59b6"}
+        ]},
+        # Entertainment
+        {"name": "Entertainment", "icon": "fa-film", "color": "#f39c12", "subcategories": [
+            {"name": "Movies", "icon": "fa-ticket-alt", "color": "#f39c12"},
+            {"name": "Music", "icon": "fa-music", "color": "#f39c12"},
+            {"name": "Subscriptions", "icon": "fa-play-circle", "color": "#f39c12"}
+        ]},
+        # Health
+        {"name": "Health", "icon": "fa-heartbeat", "color": "#1abc9c", "subcategories": [
+            {"name": "Medical", "icon": "fa-stethoscope", "color": "#1abc9c"},
+            {"name": "Pharmacy", "icon": "fa-prescription-bottle", "color": "#1abc9c"},
+            {"name": "Fitness", "icon": "fa-dumbbell", "color": "#1abc9c"}
+        ]},
+        # Personal
+        {"name": "Personal", "icon": "fa-user", "color": "#34495e", "subcategories": [
+            {"name": "Self-care", "icon": "fa-spa", "color": "#34495e"},
+            {"name": "Education", "icon": "fa-graduation-cap", "color": "#34495e"}
+        ]},
+        # Other
+        {"name": "Other", "icon": "fa-question-circle", "color": "#95a5a6", "is_system": True}
+    ]
+
+    for cat_data in default_categories:
+        subcategories = cat_data.pop('subcategories', [])
+        category = Category(user_id=user_id, **cat_data)
+        db.session.add(category)
+        db.session.flush()  # Get the ID without committing
+
+        for subcat_data in subcategories:
+            subcat = Category(user_id=user_id, parent_id=category.id, **subcat_data)
+            db.session.add(subcat)
+
+    db.session.commit()
+    
+    # Create default category mappings after creating categories
+    create_default_category_mappings(user_id)
+
+def create_default_budgets(user_id):
+    """Create default budget templates for a new user, all deactivated by default"""
+    from app import Budget, Category, db
+
+    # Get the user's categories first
+    categories = Category.query.filter_by(user_id=user_id).all()
+    category_map = {}
+    
+    # Create a map of category types to their IDs
+    for category in categories:
+        if category.name == "Housing":
+            category_map['housing'] = category.id
+        elif category.name == "Food":
+            category_map['food'] = category.id
+        elif category.name == "Transportation":
+            category_map['transportation'] = category.id
+        elif category.name == "Entertainment":
+            category_map['entertainment'] = category.id
+        elif category.name == "Shopping":
+            category_map['shopping'] = category.id
+        elif category.name == "Health":
+            category_map['health'] = category.id
+        elif category.name == "Personal":
+            category_map['personal'] = category.id
+        elif category.name == "Other":
+            category_map['other'] = category.id
+    
+    # Default budget templates with realistic amounts
+    default_budgets = [
+        {
+            'name': 'Monthly Housing Budget',
+            'category_type': 'housing',
+            'amount': 1200,
+            'period': 'monthly',
+            'include_subcategories': True
+        },
+        {
+            'name': 'Monthly Food Budget',
+            'category_type': 'food',
+            'amount': 600,
+            'period': 'monthly',
+            'include_subcategories': True
+        },
+        {
+            'name': 'Monthly Transportation',
+            'category_type': 'transportation',
+            'amount': 400,
+            'period': 'monthly',
+            'include_subcategories': True
+        },
+        {
+            'name': 'Monthly Entertainment',
+            'category_type': 'entertainment',
+            'amount': 200,
+            'period': 'monthly',
+            'include_subcategories': True
+        },
+        {
+            'name': 'Monthly Shopping',
+            'category_type': 'shopping',
+            'amount': 300,
+            'period': 'monthly',
+            'include_subcategories': True
+        },
+        {
+            'name': 'Monthly Healthcare',
+            'category_type': 'health',
+            'amount': 150,
+            'period': 'monthly',
+            'include_subcategories': True
+        },
+        {
+            'name': 'Monthly Personal',
+            'category_type': 'personal',
+            'amount': 200,
+            'period': 'monthly',
+            'include_subcategories': True
+        },
+        {
+            'name': 'Weekly Grocery Budget',
+            'category_type': 'food',  # Will use subcategory if available
+            'amount': 150,
+            'period': 'weekly',
+            'include_subcategories': False,
+            'subcategory_name': 'Groceries'  # Try to find this subcategory
+        },
+        {
+            'name': 'Weekly Dining Out',
+            'category_type': 'food',  # Will use subcategory if available
+            'amount': 75,
+            'period': 'weekly',
+            'include_subcategories': False,
+            'subcategory_name': 'Restaurants'  # Try to find this subcategory
+        },
+        {
+            'name': 'Monthly Subscriptions',
+            'category_type': 'entertainment',  # Will use subcategory if available
+            'amount': 50,
+            'period': 'monthly',
+            'include_subcategories': False,
+            'subcategory_name': 'Subscriptions'  # Try to find this subcategory
+        },
+        {
+            'name': 'Annual Vacation',
+            'category_type': 'personal',
+            'amount': 1500,
+            'period': 'yearly',
+            'include_subcategories': False
+        }
+    ]
+    
+    # Add budgets to database
+    budgets_added = 0
+    
+    for budget_template in default_budgets:
+        # Determine the category ID to use
+        category_id = None
+        cat_type = budget_template['category_type']
+        
+        if cat_type in category_map:
+            category_id = category_map[cat_type]
             
-            return new_category.id
+            # Check for subcategory if specified
+            if 'subcategory_name' in budget_template:
+                # Find the category
+                main_category = Category.query.get(category_id)
+                if main_category and hasattr(main_category, 'subcategories'):
+                    # Look for matching subcategory
+                    for subcat in main_category.subcategories:
+                        if budget_template['subcategory_name'].lower() in subcat.name.lower():
+                            category_id = subcat.id
+                            break
+        
+        # If we have a valid category, create the budget
+        if category_id:
+            new_budget = Budget(
+                user_id=user_id,
+                category_id=category_id,
+                name=budget_template['name'],
+                amount=budget_template['amount'],
+                period=budget_template['period'],
+                include_subcategories=budget_template.get('include_subcategories', True),
+                start_date=datetime.utcnow(),
+                is_recurring=True,
+                active=False,  # Deactivated by default
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            
+            db.session.add(new_budget)
+            budgets_added += 1
     
-    # If we still don't have a category, try auto-categorization again with the description
-    if description and user_id:
-        # Try to auto-categorize based on description
-        auto_category_id = auto_categorize_transaction(description, user_id)
-        if auto_category_id:
-            return auto_category_id
-    
-    # Default to None if no match found and auto-categorize is off
-    return None
+    if budgets_added > 0:
+        db.session.commit()
+        
+    return budgets_added
 
-
+def update_currency_rates():
+    """
+    Update currency exchange rates using a public API
+    Returns the number of currencies updated or -1 on error
+    """
+    try:
+        # Get the base currency
+        base_currency = Currency.query.filter_by(is_base=True).first()
+        if not base_currency:
+            app.logger.error("No base currency found. Cannot update rates.")
+            return -1
+            
+        base_code = base_currency.code
+        
+        # Use ExchangeRate-API (free tier - https://www.exchangerate-api.com/)
+        # Or you can use another free API like https://frankfurter.app/
+        response = requests.get(f'https://api.frankfurter.app/latest?from={base_code}')
+        
+        if response.status_code != 200:
+            app.logger.error(f"API request failed with status code {response.status_code}")
+            return -1
+        
+        data = response.json()
+        rates = data.get('rates', {})
+        
+        # Get all currencies except base
+        currencies = Currency.query.filter(Currency.code != base_code).all()
+        updated_count = 0
+        
+        # Update rates
+        for currency in currencies:
+            if currency.code in rates:
+                currency.rate_to_base = 1 / rates[currency.code]  # Convert to base currency rate
+                currency.last_updated = datetime.utcnow()
+                updated_count += 1
+            else:
+                app.logger.warning(f"No rate found for {currency.code}")
+        
+        # Commit changes
+        db.session.commit()
+        app.logger.info(f"Updated {updated_count} currency rates")
+        return updated_count
+        
+    except Exception as e:
+        app.logger.error(f"Error updating currency rates: {str(e)}")
+        return -1
 def init_default_currencies():
     """Initialize the default currencies in the database"""
     with app.app_context():
@@ -843,53 +1203,6 @@ def get_base_currency():
             'name': base_currency.name
         }
     
-
-@app.before_first_request
-def check_db_structure():
-    """
-    Check database structure and add any missing columns.
-    This function runs before the first request to ensure the database schema is up-to-date.
-    """
-    with app.app_context():
-        app.logger.info("Checking database structure...")
-        inspector = inspect(db.engine)
-        
-        # Check User model for user_color column
-        users_columns = [col['name'] for col in inspector.get_columns('users')]
-        if 'user_color' not in users_columns:
-            app.logger.warning("Missing user_color column in users table - adding it now")
-            db.session.execute(text('ALTER TABLE users ADD COLUMN user_color VARCHAR(7) DEFAULT "#15803d"'))
-            db.session.commit()
-            app.logger.info("Added user_color column to users table")
-            
-        # Check for OIDC columns
-        if 'oidc_id' not in users_columns:
-            app.logger.warning("Missing oidc_id column in users table - adding it now")
-            db.session.execute(text('ALTER TABLE users ADD COLUMN oidc_id VARCHAR(255)'))
-            db.session.commit()
-            app.logger.info("Added oidc_id column to users table")
-            
-            # Create index on oidc_id column
-            indexes = [idx['name'] for idx in inspector.get_indexes('users')]
-            if 'ix_users_oidc_id' not in indexes:
-                db.session.execute(text('CREATE UNIQUE INDEX ix_users_oidc_id ON users (oidc_id)'))
-                db.session.commit()
-                app.logger.info("Created index on oidc_id column")
-                
-        if 'oidc_provider' not in users_columns:
-            app.logger.warning("Missing oidc_provider column in users table - adding it now")
-            db.session.execute(text('ALTER TABLE users ADD COLUMN oidc_provider VARCHAR(50)'))
-            db.session.commit()
-            app.logger.info("Added oidc_provider column to users table")
-            
-        if 'last_login' not in users_columns:
-            app.logger.warning("Missing last_login column in users table - adding it now")
-            # Change DATETIME to TIMESTAMP for PostgreSQL compatibility
-            db.session.execute(text('ALTER TABLE users ADD COLUMN last_login TIMESTAMP'))
-            db.session.commit()
-            app.logger.info("Added last_login column to users table")
-            
-        app.logger.info("Database structure check completed")
 
 @app.context_processor
 def utility_processor():
@@ -1366,98 +1679,107 @@ def handle_comparison_request():
     
     return jsonify(result)
 
-# Helper functions for the comparison feature
+#--------------------
+# # Password reset routes
+#--------------------
 
-def process_daily_spending(expenses, start_date, end_date):
-    """Process expenses into daily totals"""
-    # Calculate number of days in period
-    days = (end_date - start_date).days + 1
-    daily_spending = [0] * days
-    
-    for expense in expenses:
-        # Calculate day index
-        day_index = (expense['date'] - start_date).days
-        if 0 <= day_index < days:
-            daily_spending[day_index] += expense['user_portion']
-    
-    return daily_spending
 
-def normalize_time_series(data, target_length):
-    """Normalize a time series to a target length for better comparison"""
-    if len(data) == 0:
-        return [0] * target_length
-    
-    if len(data) == target_length:
-        return data
-    
-    # Use resampling to normalize the data
-    result = []
-    ratio = len(data) / target_length
-    
-    for i in range(target_length):
-        start_idx = int(i * ratio)
-        end_idx = int((i + 1) * ratio)
-        if end_idx > len(data):
-            end_idx = len(data)
+@app.route('/reset_password_request', methods=['GET', 'POST'])
+def reset_password_request():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
         
-        if start_idx == end_idx:
-            segment_avg = data[start_idx] if start_idx < len(data) else 0
+    if request.method == 'POST':
+        email = request.form['email']
+        user = User.query.filter_by(id=email).first()
+        
+        if user:
+            token = user.generate_reset_token()
+            db.session.commit()
+            
+            # Generate the reset password URL
+            reset_url = url_for('reset_password', token=token, email=email, _external=True)
+            
+            # Prepare the email
+            subject = "Password Reset Request"
+            body_text = f'''
+                    To reset your password, please visit the following link:
+                    {reset_url}
+
+                    If you did not make this request, please ignore this email.
+
+                    This link will expire in 1 hour.
+                    '''
+            body_html = f'''
+                    <p>To reset your password, please click the link below:</p>
+                    <p><a href="{reset_url}">Reset Your Password</a></p>
+                    <p>If you did not make this request, please ignore this email.</p>
+                    <p>This link will expire in 1 hour.</p>
+                    '''
+            
+            try:
+                msg = Message(
+                    subject=subject,
+                    recipients=[email],
+                    body=body_text,
+                    html=body_html
+                )
+                mail.send(msg)
+                app.logger.info(f"Password reset email sent to {email}")
+                
+                # Success message (don't reveal if email exists or not for security)
+                flash("If your email address exists in our database, you will receive a password reset link shortly.")
+            except Exception as e:
+                app.logger.error(f"Error sending password reset email: {str(e)}")
+                flash("An error occurred while sending the password reset email. Please try again later.")
         else:
-            segment_avg = sum(data[start_idx:end_idx]) / (end_idx - start_idx)
+            # Still show success message even if email not found (security)
+            flash("If your email address exists in our database, you will receive a password reset link shortly.")
+            app.logger.info(f"Password reset requested for non-existent email: {email}")
         
-        result.append(segment_avg)
+        return redirect(url_for('login'))
     
-    return result
+    return render_template('reset_password.html')
 
-
-def get_category_name(expense):
-    """Helper function to get the category name for an expense"""
-    if hasattr(expense, 'category_id') and expense.category_id:
-        category = Category.query.get(expense.category_id)
-        if category:
-            return category.name
-    return None
-
-
-def process_daily_spending(expenses, start_date, end_date):
-    """Process expenses into daily totals"""
-    days = (end_date - start_date).days + 1
-    daily_spending = [0] * days
+@app.route('/reset_password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
     
-    for expense in expenses:
-        day_index = (expense['date'] - start_date).days
-        if 0 <= day_index < days:
-            daily_spending[day_index] += expense['user_portion']
+    email = request.args.get('email')
+    if not email:
+        flash('Invalid reset link.')
+        return redirect(url_for('login'))
     
-    return daily_spending
-
-
-def normalize_time_series(data, target_length):
-    """Normalize a time series to a target length for better comparison"""
-    if len(data) == 0:
-        return [0] * target_length
+    user = User.query.filter_by(id=email).first()
     
-    if len(data) == target_length:
-        return data
+    # Verify the token is valid
+    if not user or not user.verify_reset_token(token):
+        flash('Invalid or expired reset link. Please request a new one.')
+        return redirect(url_for('reset_password_request'))
     
-    # Use resampling to normalize the data
-    result = []
-    ratio = len(data) / target_length
-    
-    for i in range(target_length):
-        start_idx = int(i * ratio)
-        end_idx = int((i + 1) * ratio)
-        if end_idx > len(data):
-            end_idx = len(data)
+    if request.method == 'POST':
+        password = request.form['password']
+        confirm_password = request.form['confirm_password']
         
-        if start_idx == end_idx:
-            segment_avg = data[start_idx] if start_idx < len(data) else 0
-        else:
-            segment_avg = sum(data[start_idx:end_idx]) / (end_idx - start_idx)
+        if password != confirm_password:
+            flash('Passwords do not match.')
+            return render_template('reset_password_confirm.html', token=token, email=email)
         
-        result.append(segment_avg)
+        # Update the user's password
+        user.set_password(password)
+        user.clear_reset_token()
+        db.session.commit()
+        
+        app.logger.info(f"Password reset successful for user: {email}")
+        flash('Your password has been reset successfully. You can now log in with your new password.')
+        return redirect(url_for('login'))
     
-    return result
+    return render_template('reset_password_confirm.html', token=token, email=email)
+
+
+
+
 
 #--------------------
 # DATABASE INITIALIZATION
@@ -1469,11 +1791,8 @@ with app.app_context():
         print("Creating database tables...")
         db.create_all()
         extensions.init_db()
-        #init_default_currencies()
+        init_default_currencies()
         print("Tables created successfully")
-        print(inspect(db.engine).get_table_names())
-        print(db.engine)
-        print(extensions.engine)
     except Exception as e:
         print(f"ERROR CREATING TABLES: {str(e)}")
 
