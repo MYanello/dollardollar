@@ -16,6 +16,11 @@
                 <i class="fas fa-sync-alt me-2"></i>SimpleFin Connect
             </button>
         </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="gocardless-tab" data-bs-toggle="tab" data-bs-target="#gocardless" type="button" role="tab" aria-controls="gocardless" aria-selected="false">
+                <i class="fas fa-sync-alt me-2"></i>GoCardless Connect
+            </button>
+        </li>
     </ul>
     
     <!-- Tab Content -->
@@ -28,7 +33,7 @@
                     <h5 class="mb-0">Import Transactions from CSV</h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="{{ url_for('import_csv') }}" enctype="multipart/form-data">
+                    <form method="POST" action="{{ url_for('account.import_csv') }}" enctype="multipart/form-data">
                         <div class="mb-3">
                             <label for="csv_file" class="form-label">CSV File</label>
                             <input type="file" class="form-control bg-dark text-light" id="csv_file" name="csv_file" accept=".csv" required>
@@ -225,12 +230,12 @@ Date,Amount,Description,Category,Type
                         </div>
                     {% else %}
                         <div class="d-flex justify-content-center mb-3">
-                            <a href="{{ url_for('connect_simplefin') }}" class="btn btn-primary btn-lg">
+                            <a href="{{ url_for('simplefin.connect_simplefin') }}" class="btn btn-primary btn-lg">
                                 <i class="fas fa-key me-2"></i>Get SimpleFin Setup Token
                             </a>
                         </div>
                         
-                        <form method="POST" action="{{ url_for('process_simplefin_token') }}">
+                        <form method="POST" action="{{ url_for('simplefin.process_simplefin_token') }}">
                             <div class="mb-3">
                                 <label for="setup_token" class="form-label">Enter your SimpleFin Setup Token</label>
                                 <input type="text" class="form-control bg-dark text-light" id="setup_token" name="setup_token" 
@@ -290,6 +295,7 @@ Date,Amount,Description,Category,Type
         </div>
     </div>
 </div>
+{% include "gocardless/advanced_tab.html" %}
     </div>
 </div>
 
@@ -673,5 +679,30 @@ Date,Amount,Description,Category,Type
         // You can replace this with a nicer error notification
         alert(message);
     }
+
+    document.addEventListener("DOMContentLoaded", function () {
+    // Activate the tab based on the URL hash on load
+    const hash = window.location.hash;
+    if (hash) {
+        const tabTrigger = document.querySelector(`button[data-bs-target="${hash}"]`);
+        if (tabTrigger) {
+            const tab = new bootstrap.Tab(tabTrigger);
+            tab.show();
+        }
+    }
+
+    // When a tab is shown, update the URL hash
+    const tabButtons = document.querySelectorAll('button[data-bs-toggle="tab"]');
+    tabButtons.forEach(btn => {
+        btn.addEventListener('shown.bs.tab', function (event) {
+            const target = btn.getAttribute("data-bs-target");
+            if (history.pushState) {
+                history.pushState(null, null, target);
+            } else {
+                location.hash = target;
+            }
+        });
+    });
+});
 </script>
 {% endblock %}

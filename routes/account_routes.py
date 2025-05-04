@@ -1,5 +1,6 @@
 from datetime import datetime
 from datetime import timezone as tz
+from typing import Any
 
 from flask import (
     Blueprint,
@@ -12,8 +13,10 @@ from flask import (
     url_for,
 )
 from flask_login import current_user
+from werkzeug import Response
+from werkzeug.datastructures.file_storage import FileStorage
 
-from extensions import db
+from database import db
 from models import Account, Currency, Expense
 from services.helpers import (
     convert_currency,
@@ -26,27 +29,33 @@ from services.wrappers import login_required_dev
 account_bp = Blueprint("account", __name__)
 
 
-@account_bp.route("/accounts")
+@account_bp.route("/")
 @login_required_dev
-def accounts():
+def accounts() -> str:
     """View and manage financial accounts."""
     # Get all user accounts
-    user_accounts = Account.query.filter_by(user_id=current_user.id).all()
+    user_accounts: list[Account] = (
+        db.session.query(Account).filter_by(user_id=current_user.id).all()
+    )
 
     # Get user's preferred currency for conversion and display
     user_currency = None
     if current_user.default_currency_code:
-        user_currency = Currency.query.filter_by(
-            code=current_user.default_currency_code
-        ).first()
+        user_currency: Currency | None = (
+            db.session.query(Currency)
+            .filter_by(code=current_user.default_currency_code)
+            .first()
+        )
 
     # Fall back to base currency if user has no preference
     if not user_currency:
-        user_currency = Currency.query.filter_by(is_base=True).first()
+        user_currency = (
+            db.session.query(Currency).filter_by(is_base=True).first()
+        )
 
     # If somehow we still don't have a currency, use USD as ultimate fallback
     if not user_currency:
-        user_currency = Currency.query.filter_by(
+        user_currency = db.session.query(Currency).filter_by(
             code="USD"
         ).first() or Currency(
             code="USD", name="US Dollar", symbol="$", rate_to_base=1.0
@@ -67,7 +76,7 @@ def accounts():
             continue
 
         # Get account's currency code
-        account_currency = account.currency_code or user_currency_code
+        account_currency: str = account.currency_code or user_currency_code
 
         # Convert to user's preferred currency if different
         if account_currency != user_currency_code:
@@ -92,7 +101,7 @@ def accounts():
     net_worth = total_assets - total_liabilities
 
     # Get all currencies for the form
-    currencies = Currency.query.all()
+    currencies: list[Currency] = db.session.query(Currency).all()
 
     return render_template(
         "accounts.html",
@@ -110,10 +119,12 @@ def accounts():
 def advanced():
     """Display advanced features like account management and imports."""
     # Get all user accounts
-    accounts = Account.query.filter_by(user_id=current_user.id).all()
+    accounts: list[Account] = (
+        db.session.query(Account).filter_by(user_id=current_user.id).all()
+    )
 
     # Get connected accounts (those with SimpleFin integration)
-    connected_accounts = [
+    connected_accounts: list[Account] = [
         account for account in accounts if account.import_source == "simplefin"
     ]
 
@@ -125,7 +136,7 @@ def advanced():
         and account.balance > 0
     )
 
-    total_liabilities = abs(
+    total_liabilities: float = abs(
         sum(
             account.balance
             for account in accounts
@@ -133,13 +144,13 @@ def advanced():
         )
     )
 
-    net_worth = total_assets - total_liabilities
+    net_worth: float = total_assets - total_liabilities
 
     # Get base currency for display
     base_currency = get_base_currency()
 
     # Get all currencies for the form
-    currencies = Currency.query.all()
+    currencies: list[Currency] = db.session.query(Currency).all()
 
     return render_template(
         "advanced.html",
@@ -168,9 +179,9 @@ def add_account():
 
         # Create new account
         account = Account(
-            name=name,
-            type=account_type,
-            institution=institution,
+            name=name,  # type: ignore[]
+            type=account_type,  # type: ignore[]
+            institution=institution,  # type: ignore[]
             balance=balance,
             currency_code=currency_code,
             user_id=current_user.id,
@@ -184,15 +195,21 @@ def add_account():
         db.session.rollback()
         flash(f"Error adding account: {e!s}")
 
-    return redirect(url_for("accounts"))
+    return redirect(url_for("account.accounts"))
 
 
 @account_bp.route("/get_account/<int:account_id>")
 @login_required_dev
-def get_account(account_id):
+def get_account(account_id) -> tuple[Response, int]:
     """Get account details via AJAX."""
     try:
-        account = Account.query.get_or_404(account_id)
+        account: Account | None = (
+            db.session.query(Account).filter_by(id=account_id).first()
+        )
+        if not account:
+            return jsonify(
+                {"success": False, "message": "Account not found"}
+            ), 404
 
         # Security check
         if account.user_id != current_user.id:
@@ -204,9 +221,9 @@ def get_account(account_id):
             ), 403
 
         # Get transaction count for this account
-        transaction_count = Expense.query.filter_by(
-            account_id=account_id
-        ).count()
+        transaction_count = (
+            db.session.query(Expense).filter_by(account_id=account_id).count()
+        )
 
         return jsonify(
             {
@@ -222,7 +239,7 @@ def get_account(account_id):
                     "transaction_count": transaction_count,
                 },
             }
-        )
+        ), 200
     except Exception as e:
         current_app.logger.exception("Error retrieving account %s", account_id)
         return jsonify({"success": False, "message": f"Error: {e!s}"}), 500
@@ -233,18 +250,23 @@ def get_account(account_id):
 def update_account():
     """Update an existing account."""
     try:
-        account_id = request.form.get("account_id")
-        account = Account.query.get_or_404(account_id)
+        account_id: str | None = request.form.get("account_id")
+        account: Account | None = (
+            db.session.query(Account).filter_by(id=account_id).first()
+        )
+        if not account:
+            flash("Account not found")
+            return redirect(url_for("account.accounts"))
 
         # Security check
         if account.user_id != current_user.id:
             flash("You do not have permission to edit this account")
-            return redirect(url_for("accounts"))
+            return redirect(url_for("account.accounts"))
 
         # Update fields
-        account.name = request.form.get("name")
-        account.type = request.form.get("type")
-        account.institution = request.form.get("institution")
+        account.name = request.form.get("name")  # type: ignore[]
+        account.type = request.form.get("type")  # type: ignore[]
+        account.institution = request.form.get("institution")  # type: ignore[]
         account.balance = float(request.form.get("balance", 0))
         account.currency_code = request.form.get("currency_code")
 
@@ -255,15 +277,21 @@ def update_account():
         db.session.rollback()
         flash(f"Error updating account: {e!s}")
 
-    return redirect(url_for("accounts"))
+    return redirect(url_for("account.accounts"))
 
 
 @account_bp.route("/delete_account/<int:account_id>", methods=["DELETE"])
 @login_required_dev
-def delete_account(account_id):
+def delete_account(account_id) -> tuple[Response, int]:
     """Delete an account."""
     try:
-        account = Account.query.get_or_404(account_id)
+        account: Account | None = (
+            db.session.query(Account).filter_by(id=account_id).first()
+        )
+        if not account:
+            return jsonify(
+                {"success": False, "message": "Account not found"}
+            ), 404
 
         # Security check
         if account.user_id != current_user.id:
@@ -279,7 +307,7 @@ def delete_account(account_id):
 
         return jsonify(
             {"success": True, "message": "Account deleted successfully"}
-        )
+        ), 200
     except Exception as e:
         db.session.rollback()
         current_app.logger.exception("Error deleting account %s", account_id)
@@ -288,27 +316,27 @@ def delete_account(account_id):
 
 @account_bp.route("/import_csv", methods=["POST"])
 @login_required_dev
-def import_csv():  # noqa: C901 PLR0912 PLR0915
+def import_csv() -> Response | str:  # noqa: C901 PLR0912 PLR0915
     """Import transactions from a CSV file."""
     if "csv_file" not in request.files:
         flash("No file provided")
-        return redirect(url_for("advanced"))
+        return redirect(url_for("account.advanced"))
 
-    csv_file = request.files["csv_file"]
+    csv_file: FileStorage = request.files["csv_file"]
 
-    if csv_file.filename == "":
+    if csv_file.filename == "" or csv_file.filename is None:
         flash("No file selected")
-        return redirect(url_for("advanced"))
+        return redirect(url_for("account.advanced"))
 
     # Case-insensitive extension check
     if not csv_file.filename.lower().endswith(".csv"):
         flash("File must be a CSV")
-        return redirect(url_for("advanced"))
+        return redirect(url_for("account.advanced"))
 
     # Define base_currency for any functions that might need it
     base_currency = get_base_currency()
 
-    imported_expenses = []
+    imported_expenses: list[Any] = []
 
     try:
         # Get form parameters
@@ -353,14 +381,18 @@ def import_csv():  # noqa: C901 PLR0912 PLR0915
         # Get account if specified
         account = None
         if account_id:
-            account = Account.query.get(account_id)
+            account = db.session.query(Account).filter_by(id=account_id).first()
+            if not account:
+                flash("Account not found")
+                return redirect(url_for("account.advanced"))
+
             if account and account.user_id != current_user.id:
                 flash("Invalid account selected")
-                return redirect(url_for("advanced"))
+                return redirect(url_for("account.advanced"))
 
         # Use the enhanced determine_transaction_type
         # function that accepts account_id
-        def determine_transaction_type_for_import(row, current_account_id=None):  # noqa: PLR0911 C901
+        def determine_transaction_type_for_import(row, current_account_id=None):  # noqa: PLR0911 PLR0912 C901
             """Determine transaction type based on row data from CSV import."""
             type_column = request.form.get("type_column")
             negative_is_expense = "negative_is_expense" in request.form
@@ -437,10 +469,11 @@ def import_csv():  # noqa: C901 PLR0912 PLR0915
                     return "income"
                 if amount < 0 and not negative_is_expense:
                     return "income"  # In some systems, negative means money coming in
-                return "expense"  # Default to expense for positive amounts
             except ValueError:
                 # If amount can't be parsed, default to expense
                 return "expense"
+            else:
+                return "expense"  # Default to expense for positive amounts
 
         # Get existing cards used
         existing_cards = (
@@ -519,7 +552,7 @@ def import_csv():  # noqa: C901 PLR0912 PLR0915
                         )
                     )
 
-                if is_transfer:
+                if account and is_transfer:
                     # This is an internal transfer
                     transaction_type = "transfer"
                     # Use the detected accounts, falling back to the selected account
@@ -540,11 +573,15 @@ def import_csv():  # noqa: C901 PLR0912 PLR0915
 
                 # Check for duplicates if enabled
                 if detect_duplicates and external_id:
-                    existing = Expense.query.filter_by(
-                        user_id=current_user.id,
-                        external_id=external_id,
-                        import_source="csv",
-                    ).first()
+                    existing = (
+                        db.session.query(Expense)
+                        .filter_by(
+                            user_id=current_user.id,
+                            external_id=external_id,
+                            import_source="csv",
+                        )
+                        .first()
+                    )
 
                     if existing:
                         duplicate_count += 1
@@ -595,9 +632,15 @@ def import_csv():  # noqa: C901 PLR0912 PLR0915
                     and transaction.account_id
                     and transaction.destination_account_id
                 ):
-                    from_account = Account.query.get(transaction.account_id)
-                    to_account = Account.query.get(
-                        transaction.destination_account_id
+                    from_account = (
+                        db.session.query(Account)
+                        .filter_by(id=transaction.account_id)
+                        .first()
+                    )
+                    to_account = (
+                        db.session.query(Account)
+                        .filter_by(id=transaction.destination_account_id)
+                        .first()
                     )
 
                     if (
@@ -619,7 +662,7 @@ def import_csv():  # noqa: C901 PLR0912 PLR0915
         # Update account balance if specified
         if account and imported_count > 0:
             # Update the last sync time
-            account.last_sync = datetime(tz.utc)
+            account.last_sync = datetime.now(tz.utc)
             db.session.commit()
 
         # Flash success message
@@ -642,4 +685,4 @@ def import_csv():  # noqa: C901 PLR0912 PLR0915
         current_app.logger.exception("Error importing CSV")
         flash(f"Error importing transactions: {e!s}")
 
-    return redirect(url_for("advanced"))
+    return redirect(url_for("account.advanced"))
