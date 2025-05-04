@@ -6,8 +6,6 @@ from flask_mail import Mail
 from flask_migrate import Migrate
 from sqlalchemy import create_engine
 from sqlalchemy.engine.base import Engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.orm.session import Session
 
 import models  # noqa: F401  # Required for model discovery
 from gocardless_client import GoCardlessClient
@@ -20,13 +18,10 @@ These extensions will be attached to the Flask app in the app.py file.
 """
 
 
-engine: Engine = create_engine(
-    os.getenv("SQLALCHEMY_DATABASE_URI", "sqlite:///instance/expenses.db")
-)
-session: Session = sessionmaker(bind=engine)()
-
-
 def init_db() -> None:
+    engine: Engine = create_engine(
+        os.getenv("SQLALCHEMY_DATABASE_URI", "sqlite:///instance/expenses.db")
+    )
     Base.metadata.create_all(engine)
 
 
