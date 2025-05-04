@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta
 from datetime import timezone as tz
+from typing import Any, Literal
 
 from flask import (
     Blueprint,
+    abort,
     current_app,
     flash,
     jsonify,
@@ -14,8 +16,10 @@ from flask import (
 )
 from flask_login import current_user
 from sqlalchemy import func
+from werkzeug import Response
+from werkzeug.datastructures.file_storage import FileStorage
 
-from extensions import db
+from database import db
 from models import (
     Budget,
     Category,
@@ -29,40 +33,49 @@ from services.defaults import (
     create_default_category_mappings,
 )
 from services.helpers import auto_categorize_transaction
-from services.wrappers import demo_time_limited, login_required_dev
+from services.wrappers import login_required_dev
+from session_timeout import demo_time_limited
 
 category_bp = Blueprint("category", __name__)
 
 
 @category_bp.route("/get_category_splits/<int:expense_id>")
 @login_required_dev
-def get_category_splits(expense_id):
+def get_category_splits(expense_id) -> tuple[Response, int]:
     """Get category splits for an expense."""
     try:
-        expense = Expense.query.get_or_404(expense_id)
+        expense: Expense | None = db.session.query(Expense).get(expense_id)
+        if not expense:
+            abort(404)
 
         # Security check
         if expense.user_id != current_user.id:
             return jsonify(
                 {
                     "success": False,
-                    "message": "You do not have permission to view this expense",
+                    "message": "You don't have permission to view this expense",
                 }
             ), 403
 
         if not expense.has_category_splits:
-            return jsonify({"success": True, "splits": []})
+            return jsonify({"success": True, "splits": []}), 200
 
         # Get all category splits for this expense
-        splits = CategorySplit.query.filter_by(expense_id=expense_id).all()
+        splits = (
+            db.session.query(CategorySplit)
+            .filter_by(expense_id=expense_id)
+            .all()
+        )
 
         # Format the response
-        splits_data = []
+        splits_data: list[dict] = []
         for split in splits:
-            category = Category.query.get(split.category_id)
+            category: Category | None = db.session.query(Category).get(
+                split.category_id
+            )
 
             # Include category details if available
-            category_data = (
+            category_data: dict[str, Any] = (
                 {
                     "id": category.id,
                     "name": category.name,
@@ -88,7 +101,7 @@ def get_category_splits(expense_id):
                 }
             )
 
-        return jsonify({"success": True, "splits": splits_data})
+        return jsonify({"success": True, "splits": splits_data}), 200
 
     except Exception as e:
         current_app.logger.exception("Error getting category splits")
@@ -102,7 +115,8 @@ def manage_category_mappings():
     """View and manage category mappings for auto-categorization."""
     # Get all mappings for the current user
     mappings = (
-        CategoryMapping.query.filter_by(user_id=current_user.id)
+        db.session.query(CategoryMapping)
+        .filter_by(user_id=current_user.id)
         .order_by(
             CategoryMapping.active.desc(),
             CategoryMapping.priority.desc(),
@@ -113,7 +127,8 @@ def manage_category_mappings():
 
     # Get all categories for the dropdown
     categories = (
-        Category.query.filter_by(user_id=current_user.id)
+        db.session.query(Category)
+        .filter_by(user_id=current_user.id)
         .order_by(Category.name)
         .all()
     )
@@ -126,31 +141,36 @@ def manage_category_mappings():
 @category_bp.route("/category_mappings/create_defaults", methods=["POST"])
 @login_required_dev
 @demo_time_limited
-def create_default_mappings_route():
+def create_default_mappings_route() -> tuple[Response, int]:
     """Create default category mappings for the current user (on demand)."""
     try:
         # Get current count to check if any were created
-        current_count = CategoryMapping.query.filter_by(
-            user_id=current_user.id
-        ).count()
+        current_count: int = (
+            db.session.query(CategoryMapping)
+            .filter_by(user_id=current_user.id)
+            .count()
+        )
 
         # Call the function to create default mappings
         create_default_category_mappings(current_user.id)
 
         # Get new count to see how many were created
-        new_count = CategoryMapping.query.filter_by(
-            user_id=current_user.id
-        ).count()
-        created_count = new_count - current_count
+        new_count: int = (
+            db.session.query(CategoryMapping)
+            .filter_by(user_id=current_user.id)
+            .count()
+        )
+        created_count: int = new_count - current_count
 
         # Return success response
         return jsonify(
             {
                 "success": True,
                 "count": created_count,
-                "message": f"Successfully created {created_count} default mapping rules.",
+                "message": f"Successfully created {created_count} default "
+                "mapping rules.",
             }
-        )
+        ), 200
 
     except Exception as e:
         current_app.logger.exception("Error creating default mappings")
@@ -168,9 +188,11 @@ def bulk_categorize_transactions():
     """Categorize all uncategorized transactions using category mapping rules."""
     try:
         # Get all uncategorized transactions for the current user
-        uncategorized = Expense.query.filter_by(
-            user_id=current_user.id, category_id=None
-        ).all()
+        uncategorized = (
+            db.session.query(Expense)
+            .filter_by(user_id=current_user.id, category_id=None)
+            .all()
+        )
 
         # Track statistics
         total_count = len(uncategorized)
@@ -196,7 +218,8 @@ def bulk_categorize_transactions():
         db.session.commit()
 
         flash(
-            f"Successfully categorized {categorized_count} out of {total_count} transactions!"
+            f"Successfully categorized {categorized_count} out of {total_count}"
+            " transactions!"
         )
 
     except Exception as e:
@@ -205,7 +228,7 @@ def bulk_categorize_transactions():
         flash(f"Error: {e!s}")
 
     # Determine where to redirect based on the referrer
-    referrer = request.referrer
+    referrer: str = request.referrer
     if "transactions" in referrer:
         return redirect(url_for("transactions"))
     if "category_mappings" in referrer:
@@ -218,9 +241,9 @@ def bulk_categorize_transactions():
 @demo_time_limited
 def add_category_mapping():
     """Add a new category mapping rule."""
-    keyword = request.form.get("keyword", "").strip()
-    category_id = request.form.get("category_id")
-    is_regex = request.form.get("is_regex") == "on"
+    keyword: str = request.form.get("keyword", "").strip()
+    category_id: str | None = request.form.get("category_id")
+    is_regex: bool = request.form.get("is_regex") == "on"
     priority = int(request.form.get("priority", 0))
 
     # Validate inputs
@@ -229,21 +252,24 @@ def add_category_mapping():
         return redirect(url_for("manage_category_mappings"))
 
     # Check if mapping already exists
-    existing = CategoryMapping.query.filter_by(
-        user_id=current_user.id, keyword=keyword
-    ).first()
+    existing: CategoryMapping | None = (
+        db.session.query(CategoryMapping)
+        .filter_by(user_id=current_user.id, keyword=keyword)
+        .first()
+    )
 
     if existing:
         flash(
-            "A mapping with this keyword already exists. Please edit the existing one."
+            "A mapping with this keyword already exists. Please edit the "
+            "existing one."
         )
-        return redirect(url_for("manage_category_mappings"))
+        return redirect(url_for("category.manage_category_mappings"))
 
     # Create new mapping
     mapping = CategoryMapping(
         user_id=current_user.id,
         keyword=keyword,
-        category_id=category_id,
+        category_id=int(category_id),
         is_regex=is_regex,
         priority=priority,
         active=True,
@@ -253,7 +279,7 @@ def add_category_mapping():
     db.session.commit()
 
     flash("Category mapping rule added successfully.")
-    return redirect(url_for("manage_category_mappings"))
+    return redirect(url_for("category.manage_category_mappings"))
 
 
 @category_bp.route("/category_mappings/edit/<int:mapping_id>", methods=["POST"])
@@ -261,7 +287,11 @@ def add_category_mapping():
 @demo_time_limited
 def edit_category_mapping(mapping_id):
     """Edit an existing category mapping rule."""
-    mapping = CategoryMapping.query.get_or_404(mapping_id)
+    mapping: CategoryMapping | None = db.session.query(CategoryMapping).get(
+        mapping_id
+    )
+    if not mapping:
+        abort(404)
 
     # Check if mapping belongs to current user
     if mapping.user_id != current_user.id:
@@ -270,7 +300,7 @@ def edit_category_mapping(mapping_id):
 
     # Update fields
     mapping.keyword = request.form.get("keyword", "").strip()
-    mapping.category_id = request.form.get("category_id")
+    mapping.category_id = int(request.form.get("category_id"))  # type: ignore[]
     mapping.is_regex = request.form.get("is_regex") == "on"
     mapping.priority = int(request.form.get("priority", 0))
 
@@ -286,7 +316,11 @@ def edit_category_mapping(mapping_id):
 @login_required_dev
 def toggle_category_mapping(mapping_id):
     """Toggle the active status of a mapping."""
-    mapping = CategoryMapping.query.get_or_404(mapping_id)
+    mapping: CategoryMapping | None = db.session.query(CategoryMapping).get(
+        mapping_id
+    )
+    if not mapping:
+        abort(404)
 
     # Check if mapping belongs to current user
     if mapping.user_id != current_user.id:
@@ -297,7 +331,9 @@ def toggle_category_mapping(mapping_id):
     mapping.active = not mapping.active
     db.session.commit()
 
-    status = "activated" if mapping.active else "deactivated"
+    status: Literal["activated", "deactivated"] = (
+        "activated" if mapping.active else "deactivated"
+    )
     flash(f"Category mapping {status} successfully.")
 
     return redirect(url_for("manage_category_mappings"))
@@ -307,20 +343,24 @@ def toggle_category_mapping(mapping_id):
     "/category_mappings/delete/<int:mapping_id>", methods=["POST"]
 )
 @login_required_dev
-def delete_category_mapping(mapping_id):
+def delete_category_mapping(mapping_id) -> Response:
     """Delete a category mapping rule."""
-    mapping = CategoryMapping.query.get_or_404(mapping_id)
+    mapping: CategoryMapping | None = db.session.query(CategoryMapping).get(
+        mapping_id
+    )
+    if not mapping:
+        abort(404)
 
     # Check if mapping belongs to current user
     if mapping.user_id != current_user.id:
         flash("You don't have permission to delete this mapping.")
-        return redirect(url_for("manage_category_mappings"))
+        return redirect(url_for("category.manage_category_mappings"))
 
     db.session.delete(mapping)
     db.session.commit()
 
     flash("Category mapping deleted successfully.")
-    return redirect(url_for("manage_category_mappings"))
+    return redirect(url_for("category.manage_category_mappings"))
 
 
 @category_bp.route("/category_mappings/learn_from_history", methods=["POST"])
@@ -331,14 +371,18 @@ def learn_from_transaction_history():
     days = int(request.form.get("days", 30))
 
     # Calculate start date
-    start_date = datetime.now(tz.utc) - timedelta(days=days)
+    start_date: datetime = datetime.now(tz.utc) - timedelta(days=days)
 
     # Get transactions from the specified period that have categories
-    transactions = Expense.query.filter(
-        Expense.user_id == current_user.id,
-        Expense.date >= start_date,
-        Expense.category_id.isnot(None),
-    ).all()
+    transactions: list[Expense] = (
+        db.session.query(Expense)
+        .filter(
+            Expense.user_id == current_user.id,
+            Expense.date >= start_date,
+            Expense.category_id.isnot(None),
+        )
+        .all()
+    )
 
     # Group transactions by category and description pattern
     patterns = {}
@@ -370,7 +414,7 @@ def learn_from_transaction_history():
         patterns[key]["transactions"].append(transaction.id)
 
     # Find significant patterns (occurred at least 3 times)
-    significant_patterns = [p for p in patterns.values() if p["count"] >= 3]
+    significant_patterns = [p for p in patterns.values() if p["count"] >= 3]  # noqa: PLR2004
 
     # Sort by frequency
     significant_patterns.sort(key=lambda x: x["count"], reverse=True)
@@ -379,11 +423,15 @@ def learn_from_transaction_history():
     created_count = 0
     for pattern in significant_patterns[:15]:  # Limit to top 15
         # Check if this pattern already exists
-        existing = CategoryMapping.query.filter_by(
-            user_id=current_user.id,
-            keyword=pattern["keyword"],
-            category_id=pattern["category_id"],
-        ).first()
+        existing = (
+            db.session.query(CategoryMapping)
+            .filter_by(
+                user_id=current_user.id,
+                keyword=pattern["keyword"],
+                category_id=pattern["category_id"],
+            )
+            .first()
+        )
 
         if not existing:
             # Create a new mapping
@@ -403,7 +451,8 @@ def learn_from_transaction_history():
     if created_count > 0:
         db.session.commit()
         flash(
-            f"Created {created_count} new category mapping rules from your transaction history."
+            f"Created {created_count} new category mapping rules from your "
+            "transaction history."
         )
     else:
         flash("No new mapping patterns were found in your transaction history.")
@@ -413,20 +462,22 @@ def learn_from_transaction_history():
 
 @category_bp.route("/category_mappings/upload", methods=["POST"])
 @login_required_dev
-def upload_category_mappings():
+def upload_category_mappings() -> Response:  # noqa: C901, PLR0912, PLR0915
     """Upload and import category mappings from a CSV file."""
     if "mapping_file" not in request.files:
         flash("No file provided")
         return redirect(url_for("manage_category_mappings"))
 
-    mapping_file = request.files["mapping_file"]
+    mapping_file: FileStorage = request.files["mapping_file"]
 
     if mapping_file.filename == "":
         flash("No file selected")
         return redirect(url_for("manage_category_mappings"))
 
     # Case-insensitive extension check
-    if not mapping_file.filename.lower().endswith(".csv"):
+    if mapping_file.filename and (
+        not mapping_file.filename.lower().endswith(".csv")
+    ):
         flash("File must be a CSV")
         return redirect(url_for("manage_category_mappings"))
 
@@ -439,14 +490,15 @@ def upload_category_mappings():
         import io
 
         csv_reader = csv.DictReader(io.StringIO(file_content))
-        required_fields = ["keyword", "category"]
+        required_fields: list[str] = ["keyword", "category"]
 
         # Validate CSV structure
-        if not all(field in csv_reader.fieldnames for field in required_fields):
+        if not all(field in csv_reader.fieldnames for field in required_fields):  # type: ignore[]
             flash(
-                f"CSV must contain at least these columns: {', '.join(required_fields)}"
+                "CSV must contain at least these columns: "
+                f"{', '.join(required_fields)}"
             )
-            return redirect(url_for("manage_category_mappings"))
+            return redirect(url_for("category.manage_category_mappings"))
 
         # Process rows
         imported_count = 0
@@ -473,9 +525,11 @@ def upload_category_mappings():
                     continue
 
                 # Check if mapping already exists
-                existing = CategoryMapping.query.filter_by(
-                    user_id=current_user.id, keyword=keyword
-                ).first()
+                existing = (
+                    db.session.query(CategoryMapping)
+                    .filter_by(user_id=current_user.id, keyword=keyword)
+                    .first()
+                )
 
                 if existing:
                     # Skip duplicate mappings
@@ -484,33 +538,52 @@ def upload_category_mappings():
 
                 # Find the category by name (case-insensitive search)
                 # First try to find exact match
-                category = Category.query.filter(
-                    Category.user_id == current_user.id,
-                    func.lower(Category.name) == func.lower(category_name),
-                ).first()
+                category = (
+                    db.session.query(Category)
+                    .filter(
+                        Category.user_id == current_user.id,
+                        func.lower(Category.name) == func.lower(category_name),
+                    )
+                    .first()
+                )
 
                 # If not found, try subcategories
                 if not category:
-                    category = Category.query.filter(
-                        Category.user_id == current_user.id,
-                        Category.parent_id.isnot(None),
-                        func.lower(Category.name) == func.lower(category_name),
-                    ).first()
+                    category = (
+                        db.session.query(Category)
+                        .filter(
+                            Category.user_id == current_user.id,
+                            Category.parent_id.isnot(None),
+                            func.lower(Category.name)
+                            == func.lower(category_name),
+                        )
+                        .first()
+                    )
 
                 # If still not found, try partial matches
                 if not category:
-                    category = Category.query.filter(
-                        Category.user_id == current_user.id,
-                        func.lower(Category.name).like(
-                            f"%{category_name.lower()}%"
-                        ),
-                    ).first()
+                    category = (
+                        db.session.query(Category)
+                        .filter(
+                            Category.user_id == current_user.id,
+                            func.lower(Category.name).like(
+                                f"%{category_name.lower()}%"
+                            ),
+                        )
+                        .first()
+                    )
 
                 # If no category found, use "Other"
                 if not category:
-                    category = Category.query.filter_by(
-                        name="Other", user_id=current_user.id, is_system=True
-                    ).first()
+                    category = (
+                        db.session.query(Category)
+                        .filter_by(
+                            name="Other",
+                            user_id=current_user.id,
+                            is_system=True,
+                        )
+                        .first()
+                    )
 
                 # If we still can't find a category, skip this mapping
                 if not category:
@@ -541,7 +614,8 @@ def upload_category_mappings():
             db.session.commit()
 
         flash(
-            f"Successfully imported {imported_count} mappings. Skipped {skipped_count} rows."
+            f"Successfully imported {imported_count} mappings. "
+            f"Skipped {skipped_count} rows."
         )
 
     except Exception as e:
@@ -558,9 +632,11 @@ def export_category_mappings():
     """Export category mappings to a CSV file."""
     try:
         # Get all active mappings for the current user
-        mappings = CategoryMapping.query.filter_by(
-            user_id=current_user.id, active=True
-        ).all()
+        mappings = (
+            db.session.query(CategoryMapping)
+            .filter_by(user_id=current_user.id, active=True)
+            .all()
+        )
 
         if not mappings:
             flash("No active mappings to export.")
@@ -625,14 +701,18 @@ def has_default_categories(user_id):
     ]
 
     # Count how many of these default categories the user has
-    match_count = Category.query.filter(
-        Category.user_id == user_id,
-        Category.name.in_(default_category_names),
-        Category.parent_id is None,  # Top-level categories only
-    ).count()
+    match_count = (
+        db.session.query(Category)
+        .filter(
+            Category.user_id == user_id,
+            Category.name.in_(default_category_names),
+            Category.parent_id.is_(None),  # Top-level categories only
+        )
+        .count()
+    )
 
     # If they have at least 4 of these categories, assume defaults were created
-    return match_count >= 4
+    return match_count >= 4  # noqa: PLR2004
 
 
 @category_bp.route("/categories/create_defaults", methods=["POST"])
@@ -642,13 +722,13 @@ def user_create_default_categories():
     # Check if user already has default categories
     if has_default_categories(current_user.id):
         flash("You already have the default categories.")
-        return redirect(url_for("manage_categories"))
+        return redirect(url_for("category.manage_categories"))
 
     # Create default categories
     create_default_categories(current_user.id)
     flash("Default categories created successfully!")
 
-    return redirect(url_for("manage_categories"))
+    return redirect(url_for("category.manage_categories"))
 
 
 @category_bp.route("/categories")
@@ -656,14 +736,15 @@ def user_create_default_categories():
 def manage_categories():
     """View and manage expense categories."""
     # Get all top-level categories
-    categories = (
-        Category.query.filter_by(user_id=current_user.id, parent_id=None)
+    categories: list[Category] = (
+        db.session.query(Category)
+        .filter_by(user_id=current_user.id, parent_id=None)
         .order_by(Category.name)
         .all()
     )
 
     # Get all FontAwesome icons for the icon picker
-    icons = [
+    icons: list[str] = [
         "fa-home",
         "fa-building",
         "fa-bolt",
@@ -717,8 +798,8 @@ def manage_categories():
 def add_category():
     """Add a new category or subcategory."""
     name = request.form.get("name")
-    icon = request.form.get("icon", "fa-tag")
-    color = request.form.get("color", "#6c757d")
+    icon: str = request.form.get("icon", "fa-tag")
+    color: str = request.form.get("color", "#6c757d")
     parent_id = request.form.get("parent_id")
     if parent_id == "":
         parent_id = None
@@ -728,16 +809,16 @@ def add_category():
 
     # Validate parent category belongs to user
     if parent_id:
-        parent = Category.query.get(parent_id)
+        parent: Category | None = db.session.query(Category).get(parent_id)
         if not parent or parent.user_id != current_user.id:
             flash("Invalid parent category")
-            return redirect(url_for("manage_categories"))
+            return redirect(url_for("category.manage_categories"))
 
     category = Category(
         name=name,
         icon=icon,
         color=color,
-        parent_id=parent_id,
+        parent_id=None if not parent_id else int(parent_id),
         user_id=current_user.id,
     )
 
@@ -745,24 +826,26 @@ def add_category():
     db.session.commit()
 
     flash("Category added successfully")
-    return redirect(url_for("manage_categories"))
+    return redirect(url_for("category.manage_categories"))
 
 
 @category_bp.route("/categories/edit/<int:category_id>", methods=["POST"])
 @login_required_dev
 def edit_category(category_id):
     """Edit an existing category."""
-    category = Category.query.get_or_404(category_id)
+    category: Category | None = db.session.query(Category).get(category_id)
+    if not category:
+        abort(404)
 
     # Check if category belongs to current user
     if category.user_id != current_user.id:
         flash("You don't have permission to edit this category")
-        return redirect(url_for("manage_categories"))
+        return redirect(url_for("category.manage_categories"))
 
     # Don't allow editing system categories
     if category.is_system:
         flash("System categories cannot be edited")
-        return redirect(url_for("manage_categories"))
+        return redirect(url_for("category.manage_categories"))
 
     category.name = request.form.get("name", category.name)
     category.icon = request.form.get("icon", category.icon)
@@ -771,7 +854,7 @@ def edit_category(category_id):
     db.session.commit()
 
     flash("Category updated successfully")
-    return redirect(url_for("manage_categories"))
+    return redirect(url_for("category.manage_categories"))
 
 
 @category_bp.route("/categories/delete/<int:category_id>", methods=["POST"])
@@ -780,68 +863,84 @@ def delete_category(category_id):
     """Debug-enhanced category deletion route."""
     try:
         # Find the category
-        category = Category.query.get_or_404(category_id)
+        category: Category | None = db.session.query(Category).get(category_id)
+        if not category:
+            abort(404)
 
         # Extensive logging
         current_app.logger.info(
-            f"Attempting to delete category: {category.name} (ID: {category.id})"
+            "Attempting to delete category: %s (ID: %d)",
+            category.name,
+            category.id,
         )
         current_app.logger.info(
-            f"Category details - User ID: {category.user_id}, Is System: {category.is_system}"
+            "Category details - User ID: %s, Is System: %s",
+            category.user_id,
+            category.is_system,
         )
 
         # Security checks
         if category.user_id != current_user.id:
             current_app.logger.warning(
-                f"Unauthorized delete attempt for category {category_id}"
+                "Unauthorized delete attempt for category %d", category_id
             )
             flash("You don't have permission to delete this category")
-            return redirect(url_for("manage_categories"))
+            return redirect(url_for("category.manage_categories"))
 
         # Don't allow deleting system categories
         if category.is_system:
             current_app.logger.warning(
-                f"Attempted to delete system category {category_id}"
+                "Attempted to delete system category %d", category_id
             )
             flash("System categories cannot be deleted")
-            return redirect(url_for("manage_categories"))
+            return redirect(url_for("category.manage_categories"))
 
         # Check related records before deletion
-        expense_count = Expense.query.filter_by(category_id=category_id).count()
-        recurring_count = RecurringExpense.query.filter_by(
-            category_id=category_id
-        ).count()
-        budget_count = Budget.query.filter_by(category_id=category_id).count()
-        mapping_count = CategoryMapping.query.filter_by(
-            category_id=category_id
-        ).count()
+        expense_count: int = (
+            db.session.query(Expense).filter_by(category_id=category_id).count()
+        )
+        recurring_count: int = (
+            db.session.query(RecurringExpense)
+            .filter_by(category_id=category_id)
+            .count()
+        )
+        budget_count: int = (
+            db.session.query(Budget).filter_by(category_id=category_id).count()
+        )
+        mapping_count: int = (
+            db.session.query(CategoryMapping)
+            .filter_by(category_id=category_id)
+            .count()
+        )
 
         current_app.logger.info(
-            f"Related records - Expenses: {expense_count}, Recurring: {recurring_count}, Budgets: {budget_count}, Mappings: {mapping_count}"
+            "Related records - Expenses: %d, Recurring: %d, Budgets: %d, "
+            "Mappings: %d",
+            expense_count,
+            recurring_count,
+            budget_count,
+            mapping_count,
         )
 
         # Find 'Other' category (fallback)
-        other_category = Category.query.filter_by(
-            name="Other", user_id=current_user.id, is_system=True
-        ).first()
+        other_category = (
+            db.session.query(Category)
+            .filter_by(name="Other", user_id=current_user.id, is_system=True)
+            .first()
+        )
 
-        current_app.logger.info(f"Other category found: {bool(other_category)}")
+        current_app.logger.info(
+            "Other category found: %s", bool(other_category)
+        )
 
         # Subcategories handling
         if category.subcategories:
             current_app.logger.info(
-                f"Handling {len(category.subcategories)} subcategories"
+                "Handling %d subcategories", {len(category.subcategories)}
             )
             for subcategory in category.subcategories:
                 # Update or delete related records for subcategory
-                Expense.query.filter_by(category_id=subcategory.id).update(
-                    {
-                        "category_id": other_category.id
-                        if other_category
-                        else None
-                    }
-                )
-                RecurringExpense.query.filter_by(
+                db.session.query(Expense).filter_by(
                     category_id=subcategory.id
                 ).update(
                     {
@@ -850,27 +949,40 @@ def delete_category(category_id):
                         else None
                     }
                 )
-                CategoryMapping.query.filter_by(
+                db.session.query(RecurringExpense).filter_by(
+                    category_id=subcategory.id
+                ).update(
+                    {
+                        "category_id": other_category.id
+                        if other_category
+                        else None
+                    }
+                )
+                db.session.query(CategoryMapping).filter_by(
                     category_id=subcategory.id
                 ).delete()
 
                 # Log subcategory deletion
                 current_app.logger.info(
-                    f"Deleting subcategory: {subcategory.name} (ID: {subcategory.id})"
+                    "Deleting subcategory: %s (ID: %d)",
+                    subcategory.name,
+                    subcategory.id,
                 )
                 db.session.delete(subcategory)
 
         # Update or delete main category's related records
-        Expense.query.filter_by(category_id=category_id).update(
+        db.session.query(Expense).filter_by(category_id=category_id).update(
             {"category_id": other_category.id if other_category else None}
         )
-        RecurringExpense.query.filter_by(category_id=category_id).update(
+        db.session.query(RecurringExpense).filter_by(
+            category_id=category_id
+        ).update({"category_id": other_category.id if other_category else None})
+        db.session.query(Budget).filter_by(category_id=category_id).update(
             {"category_id": other_category.id if other_category else None}
         )
-        Budget.query.filter_by(category_id=category_id).update(
-            {"category_id": other_category.id if other_category else None}
-        )
-        CategoryMapping.query.filter_by(category_id=category_id).delete()
+        db.session.query(CategoryMapping).filter_by(
+            category_id=category_id
+        ).delete()
 
         # Actually delete the category
         db.session.delete(category)
@@ -879,16 +991,16 @@ def delete_category(category_id):
         db.session.commit()
 
         current_app.logger.info(
-            f"Category {category.name} (ID: {category_id}) deleted successfully"
+            "Category %s (ID: %d) deleted successfully",
+            category.name,
+            category_id,
         )
         flash("Category deleted successfully")
 
     except Exception as e:
         # Rollback and log any errors
         db.session.rollback()
-        current_app.logger.exception(
-            f"Error deleting category {category_id}", exc_info=True
-        )
+        current_app.logger.exception("Error deleting category %d", category_id)
         flash(f"Error deleting category: {e!s}")
 
     return redirect(url_for("manage_categories"))
@@ -899,7 +1011,7 @@ def update_category_mappings(transaction_id, category_id, learn=False):
 
     If learn=True, create a new mapping based on this categorization
     """
-    transaction = Expense.query.get(transaction_id)
+    transaction: Expense | None = db.session.query(Expense).get(transaction_id)
     if not transaction or not category_id:
         return False
 
@@ -908,9 +1020,13 @@ def update_category_mappings(transaction_id, category_id, learn=False):
         keyword = extract_keywords(transaction.description)
 
         # Check if a similar mapping already exists
-        existing = CategoryMapping.query.filter_by(
-            user_id=transaction.user_id, keyword=keyword, active=True
-        ).first()
+        existing: CategoryMapping | None = (
+            db.session.query(CategoryMapping)
+            .filter_by(
+                user_id=transaction.user_id, keyword=keyword, active=True
+            )
+            .first()
+        )
 
         if existing:
             # Update the existing mapping
@@ -965,7 +1081,7 @@ def extract_keywords(description):
         "at",
         "of",
     }
-    filtered_words = [w for w in words if w not in stop_words and len(w) > 2]
+    filtered_words = [w for w in words if w not in stop_words and len(w) > 2]  # noqa: PLR2004
 
     if not filtered_words:
         # If no good words remain, use the longest word from the original
@@ -978,28 +1094,29 @@ def extract_keywords(description):
 
 @category_bp.route("/api/categories")
 @login_required_dev
-def get_categories_api():
+def get_categories_api() -> tuple[Response, int]:
     """Fetch categories for the current user."""
     try:
         # Get all categories for the current user
-        categories = Category.query.filter_by(user_id=current_user.id).all()
+        categories: list[Category] = (
+            db.session.query(Category).filter_by(user_id=current_user.id).all()
+        )
 
         # Convert to JSON-serializable format
-        result = []
-        for category in categories:
-            result.append(
-                {
-                    "id": category.id,
-                    "name": category.name,
-                    "icon": category.icon,
-                    "color": category.color,
-                    "parent_id": category.parent_id,
-                    # Add this to help with displaying in the UI
-                    "is_parent": category.parent_id is None,
-                }
-            )
+        result: list[dict[str, Any]] = [
+            {
+                "id": category.id,
+                "name": category.name,
+                "icon": category.icon,
+                "color": category.color,
+                "parent_id": category.parent_id,
+                # Add this to help with displaying in the UI
+                "is_parent": category.parent_id is None,
+            }
+            for category in categories
+        ]
 
-        return jsonify(result)
+        return jsonify(result), 200
     except Exception as e:
         current_app.logger.exception("Error fetching categories")
         return jsonify({"error": str(e)}), 500
