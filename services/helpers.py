@@ -4,7 +4,7 @@ from flask import request
 from flask_login import current_user
 from sqlalchemy import func, or_
 
-from extensions import db
+from database import db
 from models import (
     Account,
     Budget,
@@ -83,14 +83,14 @@ def convert_currency(amount, from_code, to_code):
     if from_code == to_code:
         return amount
 
-    from_currency = Currency.query.filter_by(code=from_code).first()
-    to_currency = Currency.query.filter_by(code=to_code).first()
+    from_currency = db.session.query(Currency).filter_by(code=from_code).first()
+    to_currency = db.session.query(Currency).filter_by(code=to_code).first()
 
     if not from_currency or not to_currency:
         return amount  # Return original if either currency not found
 
     # Get base currency for reference
-    base_currency = Currency.query.filter_by(is_base=True).first()
+    base_currency = db.session.query(Currency).filter_by(is_base=True).first()
     if not base_currency:
         return amount  # Cannot convert without a base currency
 
@@ -128,7 +128,7 @@ def get_base_currency():
             "name": current_user.default_currency.name,
         }
     # Fall back to system base currency if user has no preference
-    base_currency = Currency.query.filter_by(is_base=True).first()
+    base_currency = db.session.query(Currency).filter_by(is_base=True).first()
     if not base_currency:
         # Default to USD if no base currency is set
         return {"code": "USD", "symbol": "$", "name": "US Dollar"}
@@ -144,9 +144,16 @@ def calculate_balances(user_id):  # noqa: C901 PLR0912
     balances = {}
 
     # Step 1: Calculate balances from expenses
-    expenses = Expense.query.filter(
-        or_(Expense.paid_by == user_id, Expense.split_with.like(f"%{user_id}%"))
-    ).all()
+    expenses = (
+        db.session.query(Expense)
+        .filter(
+            or_(
+                Expense.paid_by == user_id,
+                Expense.split_with.like(f"%{user_id}%"),
+            )
+        )
+        .all()
+    )
 
     for expense in expenses:
         splits = expense.calculate_splits()
@@ -158,9 +165,11 @@ def calculate_balances(user_id):  # noqa: C901 PLR0912
                 other_user_id = split["email"]
                 if other_user_id != user_id:
                     if other_user_id not in balances:
-                        other_user = User.query.filter_by(
-                            id=other_user_id
-                        ).first()
+                        other_user = (
+                            db.session.query(User)
+                            .filter_by(id=other_user_id)
+                            .first()
+                        )
                         balances[other_user_id] = {
                             "user_id": other_user_id,
                             "name": other_user.name
@@ -185,7 +194,9 @@ def calculate_balances(user_id):  # noqa: C901 PLR0912
 
             if current_user_portion > 0:
                 if payer_id not in balances:
-                    payer = User.query.filter_by(id=payer_id).first()
+                    payer = (
+                        db.session.query(User).filter_by(id=payer_id).first()
+                    )
                     balances[payer_id] = {
                         "user_id": payer_id,
                         "name": payer.name if payer else "Unknown",
@@ -195,16 +206,25 @@ def calculate_balances(user_id):  # noqa: C901 PLR0912
                 balances[payer_id]["amount"] -= current_user_portion
 
     # Step 2: Adjust balances based on settlements
-    settlements = Settlement.query.filter(
-        or_(Settlement.payer_id == user_id, Settlement.receiver_id == user_id)
-    ).all()
+    settlements = (
+        db.session.query(Settlement)
+        .filter(
+            or_(
+                Settlement.payer_id == user_id,
+                Settlement.receiver_id == user_id,
+            )
+        )
+        .all()
+    )
 
     for settlement in settlements:
         if settlement.payer_id == user_id:
             # Current user paid money to someone else
             other_user_id = settlement.receiver_id
             if other_user_id not in balances:
-                other_user = User.query.filter_by(id=other_user_id).first()
+                other_user = (
+                    db.session.query(User).filter_by(id=other_user_id).first()
+                )
                 balances[other_user_id] = {
                     "user_id": other_user_id,
                     "name": other_user.name if other_user else "Unknown",
@@ -220,7 +240,9 @@ def calculate_balances(user_id):  # noqa: C901 PLR0912
             # Current user received money from someone else
             other_user_id = settlement.payer_id
             if other_user_id not in balances:
-                other_user = User.query.filter_by(id=other_user_id).first()
+                other_user = (
+                    db.session.query(User).filter_by(id=other_user_id).first()
+                )
                 balances[other_user_id] = {
                     "user_id": other_user_id,
                     "name": other_user.name if other_user else "Unknown",
@@ -243,9 +265,11 @@ def calculate_balances(user_id):  # noqa: C901 PLR0912
 def get_budget_summary():
     """Get budget summary for current user."""
     # Get all active budgets
-    active_budgets = Budget.query.filter_by(
-        user_id=current_user.id, active=True
-    ).all()
+    active_budgets = (
+        db.session.query(Budget)
+        .filter_by(user_id=current_user.id, active=True)
+        .all()
+    )
 
     # Process budget data
     budget_summary = {
@@ -307,7 +331,9 @@ def calculate_asset_debt_trends(current_user):  # noqa: C901 PLR0912
     twelve_months_ago = today - timedelta(days=365)
 
     # Get all accounts for the user
-    accounts = Account.query.filter_by(user_id=current_user.id).all()
+    accounts = (
+        db.session.query(Account).filter_by(user_id=current_user.id).all()
+    )
 
     # Get user's preferred currency code
     user_currency_code = current_user.default_currency_code or "USD"
@@ -356,7 +382,8 @@ def calculate_asset_debt_trends(current_user):  # noqa: C901 PLR0912
 
         # Get monthly transactions for this account
         transactions = (
-            Expense.query.filter(
+            db.session.query(Expense)
+            .filter(
                 Expense.account_id == account.id,
                 Expense.user_id == current_user.id,
                 Expense.date >= twelve_months_ago,
@@ -494,7 +521,9 @@ def detect_internal_transfer(description, amount, account_id=None):
 
         # Try to identify the destination account
         # Get all user accounts
-        user_accounts = Account.query.filter_by(user_id=current_user.id).all()
+        user_accounts = (
+            db.session.query(Account).filter_by(user_id=current_user.id).all()
+        )
 
         # Look for account names in the description
         for account in user_accounts:
@@ -526,30 +555,42 @@ def get_category_id(category_name, description=None, user_id=None):  # noqa: PLR
     # If we have a category name, try to find it
     if category_name:
         # Try to find an exact match first
-        category = Category.query.filter(
-            Category.user_id == user_id if user_id else current_user.id,
-            func.lower(Category.name) == func.lower(category_name),
-        ).first()
+        category = (
+            db.session.query(Category)
+            .filter(
+                Category.user_id == user_id if user_id else current_user.id,
+                func.lower(Category.name) == func.lower(category_name),
+            )
+            .first()
+        )
 
         if category:
             return category.id
 
         # Try to find a partial match in subcategories
-        subcategory = Category.query.filter(
-            Category.user_id == user_id if user_id else current_user.id,
-            Category.parent_id.isnot(None),
-            func.lower(Category.name).like(f"%{category_name.lower()}%"),
-        ).first()
+        subcategory = (
+            db.session.query(Category)
+            .filter(
+                Category.user_id == user_id if user_id else current_user.id,
+                Category.parent_id.isnot(None),
+                func.lower(Category.name).like(f"%{category_name.lower()}%"),
+            )
+            .first()
+        )
 
         if subcategory:
             return subcategory.id
 
         # Try to find a partial match in parent categories
-        parent_category = Category.query.filter(
-            Category.user_id == user_id if user_id else current_user.id,
-            Category.parent_id.is_(None),
-            func.lower(Category.name).like(f"%{category_name.lower()}%"),
-        ).first()
+        parent_category = (
+            db.session.query(Category)
+            .filter(
+                Category.user_id == user_id if user_id else current_user.id,
+                Category.parent_id.is_(None),
+                func.lower(Category.name).like(f"%{category_name.lower()}%"),
+            )
+            .first()
+        )
 
         if parent_category:
             return parent_category.id
@@ -557,11 +598,15 @@ def get_category_id(category_name, description=None, user_id=None):  # noqa: PLR
         # If auto-categorize is enabled, create a new category
         if "auto_categorize" in request.form:
             # Find "Other" category as parent
-            other_category = Category.query.filter_by(
-                name="Other",
-                user_id=user_id if user_id else current_user.id,
-                is_system=True,
-            ).first()
+            other_category = (
+                db.session.query(Category)
+                .filter_by(
+                    name="Other",
+                    user_id=user_id if user_id else current_user.id,
+                    is_system=True,
+                )
+                .first()
+            )
 
             new_category = Category(
                 name=category_name[:50],  # Limit to 50 chars
@@ -600,7 +645,8 @@ def auto_categorize_transaction(description, user_id):  # noqa: C901
 
     # Get all active category mappings for the user
     mappings = (
-        CategoryMapping.query.filter_by(user_id=user_id, active=True)
+        db.session.query(CategoryMapping)
+        .filter_by(user_id=user_id, active=True)
         .order_by(
             CategoryMapping.priority.desc(), CategoryMapping.match_count.desc()
         )
@@ -662,3 +708,490 @@ def auto_categorize_transaction(description, user_id):  # noqa: C901
         return best_mapping.category_id
 
     return None
+
+
+def send_welcome_email(user):
+    """Send a welcome email to a newly registered user"""
+    try:
+        subject = "Welcome to Dollar Dollar Bill Y'all!"
+
+        # Create welcome email body
+        body_html = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background-color: #15803d; color: white; padding: 10px 20px; text-align: center; border-radius: 5px 5px 0 0; }}
+                .content {{ background-color: #f9f9f9; padding: 20px; border-radius: 0 0 5px 5px; }}
+                .footer {{ text-align: center; margin-top: 20px; font-size: 12px; color: #777; }}
+                .button {{ display: inline-block; background-color: #15803d; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 15px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Welcome to Dollar Dollar Bill Y'all!</h1>
+                </div>
+                <div class="content">
+                    <h2>Hi {user.name},</h2>
+                    <p>Thank you for joining our expense tracking app. We're excited to help you manage your finances effectively!</p>
+                    
+                    <h3>Getting Started:</h3>
+                    <ol>
+                        <li>Add your first expense from the dashboard</li>
+                        <li>Create groups to share expenses with friends or family</li>
+                        <li>Track your spending patterns in the stats section</li>
+                    </ol>
+                    
+                    <p>If you have any questions or need assistance, please don't hesitate to contact us.</p>
+                    
+                    <a href="{request.host_url}" class="button">Go to Dashboard</a>
+                </div>
+                <div class="footer">
+                    <p>This email was sent to {user.id}. If you didn't create this account, please ignore this email.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        # Simple text version for clients that don't support HTML
+        body_text = f"""
+        Welcome to Dollar Dollar Bill Y'all!
+        
+        Hi {user.name},
+        
+        Thank you for joining our expense tracking app. We're excited to help you manage your finances effectively!
+        
+        Getting Started:
+        1. Add your first expense from the dashboard
+        2. Create groups to share expenses with friends or family
+        3. Track your spending patterns in the stats section
+        
+        If you have any questions or need assistance, please don't hesitate to contact us.
+        
+        Visit: {request.host_url}
+        
+        This email was sent to {user.id}. If you didn't create this account, please ignore this email.
+        """
+
+        # Create and send the message
+        msg = Message(
+            subject=subject,
+            recipients=[user.id],
+            body=body_text,
+            html=body_html,
+        )
+
+        # Send the email
+        mail.send(msg)
+
+        current_app.logger.info(f"Welcome email sent to {user.id}")
+        return True
+
+    except Exception:
+        current_app.logger.exception("Error sending welcome email")
+        return False
+
+
+def reset_demo_data(user_id):
+    """Reset all demo data for a user with comprehensive relationship handling."""
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.info("Resetting demo data for user %s", {user_id})
+
+    try:
+        # Start a transaction
+        db.session.begin()
+
+        # 1. Get all expenses for this user
+        expenses = db.session.query(Expense).filter_by(user_id=user_id).all()
+        expense_ids = [expense.id for expense in expenses]
+
+        # 2. Delete category splits referencing these expenses
+        if expense_ids:
+            split_count = (
+                db.session.query(CategorySplit)
+                .filter(CategorySplit.expense_id.in_(expense_ids))
+                .delete(synchronize_session=False)
+            )
+            logger.info("Deleted %s category splits", {split_count})
+
+        # 3. Delete tags associations for these expenses
+        if expense_ids:
+            from sqlalchemy import text
+
+            db.session.execute(
+                text("""
+                DELETE FROM expense_tags 
+                WHERE expense_id IN :expense_ids
+            """),
+                {
+                    "expense_ids": tuple(expense_ids)
+                    if len(expense_ids) > 1
+                    else f"({expense_ids[0]})"
+                },
+            )
+            logger.info("Deleted expense tag associations")
+
+        # 4. Now delete expenses
+        expense_count = (
+            db.session.query(Expense).filter_by(user_id=user_id).delete()
+        )
+        logger.info("Deleted %s expenses", {expense_count})
+
+        # 5. Delete recurring expenses
+        recurring_count = (
+            db.session.query(RecurringExpense)
+            .filter_by(user_id=user_id)
+            .delete()
+        )
+        logger.info("Deleted %s recurring expenses", {recurring_count})
+
+        # 6. Delete budgets
+        budget_count = (
+            db.session.query(Budget).filter_by(user_id=user_id).delete()
+        )
+        logger.info("Deleted %s budgets", {budget_count})
+
+        # 7. Delete category mappings
+        mapping_count = (
+            db.session.query(CategoryMapping)
+            .filter_by(user_id=user_id)
+            .delete()
+        )
+        logger.info("Deleted %s category mappings", {mapping_count})
+
+        # 8. Delete ignored patterns
+        pattern_count = (
+            db.session.query(IgnoredRecurringPattern)
+            .filter_by(user_id=user_id)
+            .delete()
+        )
+        logger.info("Deleted %s ignored patterns", {pattern_count})
+
+        # 9. Delete SimpleFin settings
+        simplefin_count = (
+            db.session.query(SimpleFin).filter_by(user_id=user_id).delete()
+        )
+        logger.info("Deleted %s SimpleFin settings", {simplefin_count})
+
+        # 10. Delete settlements
+        from sqlalchemy import or_
+
+        settlement_count = (
+            db.session.query(Settlement)
+            .filter(
+                or_(
+                    Settlement.payer_id == user_id,
+                    Settlement.receiver_id == user_id,
+                )
+            )
+            .delete(synchronize_session=False)
+        )
+        logger.info("Deleted %s settlements", {settlement_count})
+
+        # 11. Delete all accounts
+        account_count = (
+            db.session.query(Account).filter_by(user_id=user_id).delete()
+        )
+        logger.info("Deleted %s accounts", {account_count})
+
+        # 12. Delete all tags
+        tag_count = db.session.query(Tag).filter_by(user_id=user_id).delete()
+        logger.info("Deleted %s tags", {tag_count})
+
+        # 13. Delete all categories
+        category_count = (
+            db.session.query(Category).filter_by(user_id=user_id).delete()
+        )
+        logger.info("Deleted %s categories", {category_count})
+
+        # Commit the transaction
+        db.session.commit()
+        logger.info("Demo data reset successful")
+        return True
+    except Exception:
+        db.session.rollback()
+        logger.exception("Error resetting demo data")
+        return False
+
+
+def sync_simplefin_for_user(user_id):
+    """Sync SimpleFin accounts for a specific user - to be called on login."""
+    with current_app.app_context():
+        current_app.logger.info(
+            "Starting SimpleFin sync for user %s on login", user_id
+        )
+
+        try:
+            # Get the user's SimpleFin settings
+            settings = (
+                db.session.query(SimpleFin)
+                .filter_by(user_id=user_id, enabled=True)
+                .first()
+            )
+
+            if not settings:
+                current_app.logger.info(
+                    "No SimpleFin settings found for user %s", user_id
+                )
+                return
+
+            # Decode the access URL
+            try:
+                access_url = base64.b64decode(
+                    settings.access_url.encode()
+                ).decode()
+            except:
+                current_app.logger.exception(
+                    "Error decoding access URL for user %s", user_id
+                )
+                return
+
+            # Fetch accounts and transactions (last 3 days for a login sync)
+            simplefin_instance = simplefin_client
+            raw_data = simplefin_instance.get_accounts_with_transactions(
+                access_url, days_back=3
+            )
+
+            if not raw_data:
+                current_app.logger.error(
+                    "Failed to fetch SimpleFin data for user %s", user_id
+                )
+                return
+
+            # Process the raw data
+            accounts = simplefin_instance.process_raw_accounts(raw_data)
+
+            # Find all SimpleFin accounts for this user
+            user_accounts = (
+                db.session.query(Account)
+                .filter_by(user_id=user_id, import_source="simplefin")
+                .all()
+            )
+
+            # Create a mapping of external IDs to account objects
+            account_map = {
+                acc.external_id: acc for acc in user_accounts if acc.external_id
+            }
+
+            # Track statistics
+            accounts_updated = 0
+            transactions_added = 0
+
+            # Update each account
+            for sf_account in accounts:
+                external_id = sf_account.get("id")
+                if not external_id:
+                    continue
+
+                # Find the corresponding account
+                if external_id in account_map:
+                    account = account_map[external_id]
+
+                    # Update account details
+                    account.balance = sf_account.get("balance", account.balance)
+                    account.last_sync = datetime.now(tz.utc)
+                    accounts_updated += 1
+
+                    # Create transaction objects
+                    transaction_objects, _ = (
+                        simplefin_instance.create_transactions_from_account(
+                            sf_account,
+                            account,
+                            user_id,
+                            detect_internal_transfer,
+                            auto_categorize_transaction,
+                            get_category_id,
+                        )
+                    )
+
+                    # Filter out existing transactions and add new ones
+                    for transaction in transaction_objects:
+                        # Check if transaction already exists
+                        existing = (
+                            db.session.query(Expense)
+                            .filter_by(
+                                user_id=user_id,
+                                external_id=transaction.external_id,
+                                import_source="simplefin",
+                            )
+                            .first()
+                        )
+
+                        if not existing:
+                            db.session.add(transaction)
+                            transactions_added += 1
+
+                            # Handle account balance updates for transfers
+                            if (
+                                transaction.transaction_type == "transfer"
+                                and transaction.destination_account_id
+                            ):
+                                # Find the destination account
+                                to_account = Account.query.get(
+                                    transaction.destination_account_id
+                                )
+                                if to_account and to_account.user_id == user_id:
+                                    # For transfers, add to destination account balance
+                                    to_account.balance += transaction.amount
+
+            # Commit changes for this user
+            if accounts_updated > 0 or transactions_added > 0:
+                db.session.commit()
+
+                # Update the SimpleFin settings last_sync time
+                settings.last_sync = datetime.now(tz.utc)
+                db.session.commit()
+
+                current_app.logger.info(
+                    f"SimpleFin sync on login for user {user_id}: {accounts_updated} accounts updated, {transactions_added} transactions added"
+                )
+
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception("Error in SimpleFin sync on login")
+
+
+def calculate_category_spending(
+    category_id, start_date, end_date, include_subcategories=True
+):
+    """Calculate total spending for a category within a date range"""
+
+    # Get the category
+    category = Category.query.get(category_id)
+    if not category:
+        return 0
+
+    total_spent = 0
+
+    # 1. Get direct expenses (transactions directly assigned to this category without splits)
+    direct_expenses = (
+        db.session.query(Expense)
+        .filter(
+            Expense.user_id == current_user.id,
+            Expense.category_id == category_id,
+            Expense.date >= start_date,
+            Expense.date <= end_date,
+            Expense.has_category_splits
+            == False,  # Important: only include non-split expenses
+        )
+        .all()
+    )
+
+    # Add up direct expenses
+    for expense in direct_expenses:
+        # Use amount_base if available (for currency conversion), otherwise use amount
+        amount = getattr(expense, "amount_base", expense.amount)
+        total_spent += amount
+
+    # 2. Get category splits assigned to this category
+    category_splits = (
+        CategorySplit.query.join(Expense)
+        .filter(
+            Expense.user_id == current_user.id,
+            CategorySplit.category_id == category_id,
+            Expense.date >= start_date,
+            Expense.date <= end_date,
+        )
+        .all()
+    )
+
+    # Add up split amounts
+    for split in category_splits:
+        # Use split amount directly - these should already be in the correct currency
+        total_spent += split.amount
+
+    # 3. Include subcategories if requested and if this is a parent category
+    if include_subcategories and not category.parent_id:
+        subcategory_ids = [subcat.id for subcat in category.subcategories]
+
+        for subcategory_id in subcategory_ids:
+            # For each subcategory, repeat the process
+            # Process direct expenses
+            subcat_direct = (
+                db.session.query(Expense)
+                .filter(
+                    Expense.user_id == current_user.id,
+                    Expense.category_id == subcategory_id,
+                    Expense.date >= start_date,
+                    Expense.date <= end_date,
+                    Expense.has_category_splits == False,
+                )
+                .all()
+            )
+
+            for expense in subcat_direct:
+                amount = getattr(expense, "amount_base", expense.amount)
+                total_spent += amount
+
+            # Process split expenses
+            subcat_splits = (
+                CategorySplit.query.join(Expense)
+                .filter(
+                    Expense.user_id == current_user.id,
+                    CategorySplit.category_id == subcategory_id,
+                    Expense.date >= start_date,
+                    Expense.date <= end_date,
+                )
+                .all()
+            )
+
+            for split in subcat_splits:
+                total_spent += split.amount
+
+    return total_spent
+
+
+def init_default_currencies():
+    """Initialize the default currencies in the database"""
+    # Check if any currencies exist
+    if len(db.session.query(Currency).all()) == 0:
+        # Add USD as base currency
+        usd = Currency(
+            code="USD",
+            name="US Dollar",
+            symbol="$",
+            rate_to_base=1.0,
+            is_base=True,
+        )
+
+        # Add some common currencies
+        eur = Currency(
+            code="EUR",
+            name="Euro",
+            symbol="€",
+            rate_to_base=1.1,  # Example rate
+            is_base=False,
+        )
+
+        gbp = Currency(
+            code="GBP",
+            name="British Pound",
+            symbol="£",
+            rate_to_base=1.3,  # Example rate
+            is_base=False,
+        )
+
+        jpy = Currency(
+            code="JPY",
+            name="Japanese Yen",
+            symbol="¥",
+            rate_to_base=0.0091,  # Example rate
+            is_base=False,
+        )
+
+        db.session.add(usd)
+        db.session.add(eur)
+        db.session.add(gbp)
+        db.session.add(jpy)
+
+        try:
+            db.session.commit()
+            print("Default currencies initialized")
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error initializing currencies: {str(e)}")
