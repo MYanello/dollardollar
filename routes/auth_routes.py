@@ -13,20 +13,21 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_user, logout_user
+from werkzeug import Response
 
-from app import (
-    DEV_USER_EMAIL,
-    DEV_USER_PASSWORD,
-    create_default_budgets,
-    create_default_categories,
+from database import db
+from models import User
+from models.simplefin import SimpleFinSettings
+from recurring_detection import detect_recurring_transactions
+from services.const import DEV_USER_EMAIL, DEV_USER_PASSWORD
+from services.defaults import create_default_budgets, create_default_categories
+from services.helpers import (
     reset_demo_data,
     send_welcome_email,
     sync_simplefin_for_user,
 )
-from extensions import db
-from models import User
-from recurring_detection import detect_recurring_transactions
 from services.wrappers import login_required_dev, restrict_demo_access
+from session_timeout import DemoTimeout
 from simplefin_client import SimpleFin
 
 auth_bp = Blueprint("auth", __name__)
@@ -35,14 +36,14 @@ MAX_BRIGHTNESS = 180
 
 
 @auth_bp.route("/")
-def home():
+def home() -> Response | str:
     if current_user.is_authenticated:
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("dashboard.dashboard"))
     return render_template("landing.html")
 
 
 @auth_bp.route("/signup", methods=["GET", "POST"])
-def signup():
+def signup() -> Response | str:
     # Check if local login is disabled
     local_login_disabled = current_app.config.get(
         "LOCAL_LOGIN_DISABLE", False
@@ -53,32 +54,32 @@ def signup():
         "DISABLE_SIGNUPS", False
     ) and not current_app.config.get("DEVELOPMENT_MODE", False):
         flash("New account registration is currently disabled.")
-        return redirect(url_for("login"))
+        return redirect(url_for("auth.login"))
 
     # If local login is disabled, redirect to login with message
     if local_login_disabled:
         flash("Direct account creation is disabled. Please use SSO.")
-        return redirect(url_for("login"))
+        return redirect(url_for("auth.login"))
 
     # Redirect to dashboard if already logged in
     if current_user.is_authenticated:
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("dashboard.dashboard"))
 
     if request.method == "POST":
-        email = request.form.get("email")
-        password = request.form.get("password")
-        name = request.form.get("name")
+        email: str = request.form.get("email")  # type: ignore[]
+        password: str = request.form.get("password")  # type: ignore[]
+        name: str = request.form.get("name")  # type: ignore[]
 
-        if User.query.filter_by(id=email).first():
+        if db.session.query(User).filter_by(id=email).first():
             flash("Email already registered")
-            return redirect(url_for("signup"))
+            return redirect(url_for("auth.signup"))
 
         # Generate a consistent color for the user
-        def generate_user_color(user_id):
+        def generate_user_color(user_id) -> str:
             """Generate a consistent color for a user based on their ID."""
             # Use MD5 hash to generate a consistent color
             hash_object = hashlib.md5(user_id.encode())
-            hash_hex = hash_object.hexdigest()
+            hash_hex: str = hash_object.hexdigest()
 
             # Use the first 6 characters of the hash to create a color
             r = int(hash_hex[:2], 16)
@@ -86,12 +87,12 @@ def signup():
             b = int(hash_hex[4:6], 16)
 
             # Ensure the color is not too light
-            brightness = (r * 299 + g * 587 + b * 114) / 1000
+            brightness: float = (r * 299 + g * 587 + b * 114) / 1000
             if brightness > MAX_BRIGHTNESS:
                 # If too bright, darken the color
-                r = min(int(r * 0.7), 255)
-                g = min(int(g * 0.7), 255)
-                b = min(int(b * 0.7), 255)
+                r: int = min(int(r * 0.7), 255)
+                g: int = min(int(g * 0.7), 255)
+                b: int = min(int(b * 0.7), 255)
 
             return f"#{r:02x}{g:02x}{b:02x}"
 
@@ -99,7 +100,7 @@ def signup():
         user.set_password(password)
 
         # Make first user admin
-        is_first_user = User.query.count() == 0
+        is_first_user: bool = db.session.query(User).count() == 0
         if is_first_user:
             user.is_admin = True
 
@@ -116,7 +117,7 @@ def signup():
 
         login_user(user)
         flash("Account created successfully!")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("dashboard.dashboard"))
 
     return render_template(
         "signup.html",
@@ -127,7 +128,7 @@ def signup():
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 @restrict_demo_access
-def login():
+def login() -> Response | str:  # noqa: C901
     # Check if we should show a logout message
     if session.pop("show_logout_message", False):
         flash(
@@ -144,18 +145,20 @@ def login():
         current_app.config["DEVELOPMENT_MODE"]
         and not current_user.is_authenticated
     ):
-        dev_user = User.query.filter_by(id=DEV_USER_EMAIL).first()
+        dev_user: User | None = (
+            db.session.query(User).filter_by(id=DEV_USER_EMAIL).first()
+        )
         if not dev_user:
             dev_user = User(id=DEV_USER_EMAIL, name="Developer", is_admin=True)
             dev_user.set_password(DEV_USER_PASSWORD)
             db.session.add(dev_user)
             db.session.commit()
         login_user(dev_user)
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("dashboard.dashboard"))
 
     # Redirect to dashboard if already logged in
     if current_user.is_authenticated:
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("dashboard.dashboard"))
 
     # Handle login form submission
     if request.method == "POST":
@@ -165,11 +168,11 @@ def login():
                 f"Password login is disabled. Please use"
                 f"{current_app.config.get('OIDC_PROVIDER_NAME', 'SSO')}."
             )
-            return redirect(url_for("login"))
+            return redirect(url_for("auth.login"))
 
-        email = request.form.get("email")
-        password = request.form.get("password")
-        user = User.query.filter_by(id=email).first()
+        email: str = request.form.get("email")  # type: ignore[]
+        password: str = request.form.get("password")  # type: ignore[]
+        user = db.session.query(User).filter_by(id=email).first()
 
         if user and user.check_password(password):
             login_user(user)
@@ -179,12 +182,13 @@ def login():
             if current_app.config.get("SIMPLEFIN_ENABLED", False):
                 try:
                     # Check if user has SimpleFin connection
-                    simplefin_settings = SimpleFin.query.filter_by(
-                        user_id=user.id, enabled=True
-                    ).first()
-
+                    simplefin_settings: SimpleFinSettings | None = (
+                        db.session.query(SimpleFinSettings)
+                        .filter_by(user_id=user.id, enabled=True)
+                        .first()
+                    )
                     # Check if last sync was more than 6 hours ago (or never)
-                    if (
+                    if simplefin_settings and (
                         not simplefin_settings.last_sync
                         or (
                             datetime.now(timezone.utc)
@@ -219,7 +223,7 @@ def login():
             detection_thread.start()
 
             db.session.commit()
-            return redirect(url_for("dashboard"))
+            return redirect(url_for("dashboard.dashboard"))
 
         flash("Invalid email or password")
 
@@ -234,9 +238,11 @@ def login():
 
 @auth_bp.route("/logout")
 @login_required_dev
-def logout():
+def logout() -> Response:
     # If this is a demo user, handle demo-specific logout
-    demo_timeout = current_app.extensions.get("demo_timeout")
+    demo_timeout: DemoTimeout | None = current_app.extensions.get(
+        "demo_timeout"
+    )
     is_demo_user = False
 
     if (
@@ -269,6 +275,6 @@ def logout():
 
     # Redirect demo users to thank you page
     if is_demo_user:
-        return redirect(url_for("demo_thanks"))
+        return redirect(url_for("demo.demo_thanks"))
 
-    return redirect(url_for("login"))
+    return redirect(url_for("auth.login"))

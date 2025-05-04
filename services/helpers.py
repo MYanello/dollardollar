@@ -1,18 +1,26 @@
+import base64
 from datetime import datetime, timedelta
 
-from flask import request
+from flask import current_app, request
 from flask_login import current_user
+from flask_mail import Message
 from sqlalchemy import func, or_
 
 from database import db
+from extensions import mail
 from models import (
     Account,
     Budget,
     Category,
     CategoryMapping,
+    CategorySplit,
     Currency,
     Expense,
+    IgnoredRecurringPattern,
+    RecurringExpense,
     Settlement,
+    SimpleFinSettings,
+    Tag,
     User,
 )
 
@@ -711,7 +719,7 @@ def auto_categorize_transaction(description, user_id):  # noqa: C901
 
 
 def send_welcome_email(user):
-    """Send a welcome email to a newly registered user"""
+    """Send a welcome email to a newly registered user."""
     try:
         subject = "Welcome to Dollar Dollar Bill Y'all!"
 
@@ -736,16 +744,16 @@ def send_welcome_email(user):
                 <div class="content">
                     <h2>Hi {user.name},</h2>
                     <p>Thank you for joining our expense tracking app. We're excited to help you manage your finances effectively!</p>
-                    
+
                     <h3>Getting Started:</h3>
                     <ol>
                         <li>Add your first expense from the dashboard</li>
                         <li>Create groups to share expenses with friends or family</li>
                         <li>Track your spending patterns in the stats section</li>
                     </ol>
-                    
+
                     <p>If you have any questions or need assistance, please don't hesitate to contact us.</p>
-                    
+
                     <a href="{request.host_url}" class="button">Go to Dashboard</a>
                 </div>
                 <div class="footer">
@@ -759,20 +767,20 @@ def send_welcome_email(user):
         # Simple text version for clients that don't support HTML
         body_text = f"""
         Welcome to Dollar Dollar Bill Y'all!
-        
+
         Hi {user.name},
-        
+
         Thank you for joining our expense tracking app. We're excited to help you manage your finances effectively!
-        
+
         Getting Started:
         1. Add your first expense from the dashboard
         2. Create groups to share expenses with friends or family
         3. Track your spending patterns in the stats section
-        
+
         If you have any questions or need assistance, please don't hesitate to contact us.
-        
+
         Visit: {request.host_url}
-        
+
         This email was sent to {user.id}. If you didn't create this account, please ignore this email.
         """
 
@@ -787,12 +795,13 @@ def send_welcome_email(user):
         # Send the email
         mail.send(msg)
 
-        current_app.logger.info(f"Welcome email sent to {user.id}")
-        return True
+        current_app.logger.info("Welcome email sent to %s.", user.id)
 
     except Exception:
         current_app.logger.exception("Error sending welcome email")
         return False
+    else:
+        return True
 
 
 def reset_demo_data(user_id):
