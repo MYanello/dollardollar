@@ -7,17 +7,33 @@ from flask_login import UserMixin
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import (
     Mapped,
-    backref,
     mapped_column,
     relationship,
 )
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from tables import group_users
+
 from .base import Base
 from .group import Group
 
 if TYPE_CHECKING:
-    from models import Currency, Expense, Group
+    from models import (
+        Account,
+        Budget,
+        Category,
+        CategoryMapping,
+        Currency,
+        Expense,
+        GoCardlessSettings,
+        Group,
+        IgnoredRecurringPattern,
+        RecurringExpense,
+        Requisition,
+        Settlement,
+        SimpleFinSettings,
+        Tag,
+    )
 
 
 class User(UserMixin, Base):
@@ -41,20 +57,20 @@ class User(UserMixin, Base):
         nullable=True, default=None
     )
     expenses: Mapped[Optional["Expense"]] = relationship(
-        "Expense", backref="user", lazy=True, default=None
+        "Expense", back_populates="user", lazy=True, default=None
     )
     default_currency_code: Mapped[Optional[str]] = mapped_column(
         String(3), ForeignKey("currencies.code"), default=None
     )
     default_currency: Mapped[Optional["Currency"]] = relationship(
-        "Currency", backref=backref("users", lazy=True), default=None
+        "Currency", back_populates="users", lazy=True, init=False
     )
     created_groups: Mapped[Optional["Group"]] = relationship(
         "Group",
-        backref="creator",
+        back_populates="creator",
         lazy=True,
         foreign_keys=[Group.created_by],
-        default=None,
+        init=False,
     )
     # OIDC related fields
     oidc_id: Mapped[Optional[str]] = mapped_column(
@@ -72,6 +88,69 @@ class User(UserMixin, Base):
     created_at: Mapped[datetime] = mapped_column(default=datetime.now(tz.utc))
     timezone: Mapped[str] = mapped_column(
         String(50), nullable=True, default="UTC"
+    )
+    accounts: Mapped[list["Account"]] = relationship(
+        "Account", back_populates="user", lazy=True, init=False
+    )
+
+    budgets: Mapped[list["Budget"]] = relationship(
+        "Budget", back_populates="user", lazy=True, init=False
+    )
+
+    categories: Mapped[list["Category"]] = relationship(
+        "Category", back_populates="user", lazy=True, init=False
+    )
+
+    category_mappings: Mapped[list["CategoryMapping"]] = relationship(
+        "CategoryMapping", back_populates="user", lazy=True, init=False
+    )
+
+    groups: Mapped[list["Group"]] = relationship(
+        "Group",
+        back_populates="members",
+        secondary=group_users,
+        lazy="subquery",
+        init=False,
+    )
+
+    requisitions: Mapped[list["Requisition"]] = relationship(
+        "Requisition", back_populates="user", lazy=True, init=False
+    )
+
+    gocardless: Mapped["GoCardlessSettings"] = relationship(
+        "GoCardlessSettings", back_populates="user", lazy=True, init=False
+    )
+
+    recurring_expenses: Mapped[list["RecurringExpense"]] = relationship(
+        "RecurringExpense", back_populates="user", lazy=True, init=False
+    )
+
+    ignored_patterns: Mapped[list["IgnoredRecurringPattern"]] = relationship(
+        "IgnoredRecurringPattern", back_populates="user", lazy=True, init=False
+    )
+
+    settlements_paid: Mapped[list["Settlement"]] = relationship(
+        "Settlement",
+        back_populates="payer",
+        foreign_keys="Settlement.payer_id",
+        lazy=True,
+        init=False,
+    )
+
+    settlements_received: Mapped[list["Settlement"]] = relationship(
+        "Settlement",
+        back_populates="receiver",
+        foreign_keys="Settlement.receiver_id",
+        lazy=True,
+        init=False,
+    )
+
+    simplefin: Mapped[Optional["SimpleFinSettings"]] = relationship(
+        "SimpleFinSettings", back_populates="user", lazy=True, init=False
+    )
+
+    tags: Mapped[list["Tag"]] = relationship(
+        "Tag", back_populates="user", lazy=True, init=False
     )
 
     def set_password(self, password):

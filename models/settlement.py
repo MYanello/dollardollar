@@ -1,11 +1,10 @@
 from datetime import datetime
 from datetime import timezone as tz
-from typing import TYPE_CHECKING, ClassVar, Optional
+from typing import TYPE_CHECKING, ClassVar
 
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import (
     Mapped,
-    backref,
     mapped_column,
     relationship,
 )
@@ -30,17 +29,19 @@ class Settlement(Base):
     amount: Mapped[float] = mapped_column(nullable=False)
 
     # Relationships
-    payer: Mapped[Optional["User"]] = relationship(
+    payer: Mapped["User"] = relationship(
         "User",
         foreign_keys=[payer_id],
-        backref=backref("settlements_paid", lazy=True),
-        default=None,
+        back_populates="settlements_paid",
+        lazy=True,
+        init=False,
     )
-    receiver: Mapped[Optional["User"]] = relationship(
+    receiver: Mapped["User"] = relationship(
         "User",
         foreign_keys=[receiver_id],
-        backref=backref("settlements_received", lazy=True),
-        default=None,
+        back_populates="settlements_received",
+        lazy=True,
+        init=False,
     )
 
     date: Mapped[datetime] = mapped_column(

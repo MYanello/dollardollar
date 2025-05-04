@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, ClassVar, Optional
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import (
     Mapped,
-    backref,
     mapped_column,
     relationship,
 )
@@ -13,7 +12,7 @@ from sqlalchemy.orm import (
 from .base import Base
 
 if TYPE_CHECKING:
-    from models import Expense, User
+    from models import Budget, Expense, RecurringExpense, User
 
 
 class Category(Base):
@@ -30,19 +29,23 @@ class Category(Base):
 
     # Relationships
     user: Mapped[Optional["User"]] = relationship(
-        "User", backref=backref("categories", lazy=True), init=False
+        "User", back_populates="categories", lazy=True, init=False
     )
-    parent_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("categories.id"), default=None
-    )
+
     parent: Mapped[Optional["Category"]] = relationship(
         "Category",
         remote_side=[id],
-        backref=backref("subcategories", lazy=True),
+        back_populates="subcategories",
+        lazy=True,
         init=False,
     )
+
     expenses: Mapped[Optional["Expense"]] = relationship(
-        "Expense", backref=backref("category", lazy=True), init=False
+        "Expense", back_populates="category", lazy=True, init=False
+    )
+
+    parent_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("categories.id"), default=None
     )
 
     icon: Mapped[str] = mapped_column(
@@ -54,6 +57,26 @@ class Category(Base):
         default=False
     )  # System categories can't be deleted
     created_at: Mapped[datetime] = mapped_column(default=datetime.now(tz.utc))
+
+    budgets: Mapped[list["Budget"]] = relationship(
+        "Budget", back_populates="category", lazy=True, init=False
+    )
+
+    subcategories: Mapped[list["Category"]] = relationship(
+        "Category", back_populates="parent", lazy=True, init=False
+    )
+
+    splits: Mapped["CategorySplit"] = relationship(
+        "CategorySplit", back_populates="category", lazy=True, init=False
+    )
+
+    mappings: Mapped["CategoryMapping"] = relationship(
+        "CategoryMapping", back_populates="category", lazy=True, init=False
+    )
+
+    recurring_expenses: Mapped[list["RecurringExpense"]] = relationship(
+        "RecurringExpense", back_populates="category", lazy=True, init=False
+    )
 
     def __repr__(self) -> str:
         """Return string representation of category information."""
@@ -78,13 +101,14 @@ class CategorySplit(Base):
     )
 
     # Relationships
-    expense: Mapped[Optional["Expense"]] = relationship(
+    expense: Mapped["Expense"] = relationship(
         "Expense",
-        backref=backref("category_splits", cascade="all, delete-orphan"),
+        back_populates="category_splits",
+        lazy=True,
         init=False,
     )
-    category: Mapped[Optional["Category"]] = relationship(
-        "Category", backref=backref("splits", lazy=True), init=False
+    category: Mapped["Category"] = relationship(
+        "Category", back_populates="splits", lazy=True, init=False
     )
 
 
@@ -102,11 +126,11 @@ class CategoryMapping(Base):
     )
 
     # Relationships
-    user: Mapped[Optional["User"]] = relationship(
-        "User", backref=backref("category_mappings", lazy=True), init=False
+    user: Mapped["User"] = relationship(
+        "User", back_populates="category_mappings", lazy=True, init=False
     )
     category: Mapped[Optional["Category"]] = relationship(
-        "Category", backref=backref("mappings", lazy=True), init=False
+        "Category", back_populates="mappings", lazy=True, init=False
     )
 
     is_regex: Mapped[bool] = mapped_column(

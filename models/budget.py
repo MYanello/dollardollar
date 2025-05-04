@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, Optional
 from sqlalchemy import ForeignKey, String, literal, or_
 from sqlalchemy.orm import (
     Mapped,
-    backref,
     mapped_column,
     relationship,
 )
@@ -48,10 +47,10 @@ class Budget(Base):
 
     # Relationships
     user: Mapped[Optional["User"]] = relationship(
-        "User", backref=backref("budgets", lazy=True), init=False
+        "User", back_populates="budgets", lazy=True, init=False
     )
     category: Mapped[Optional["Category"]] = relationship(
-        "Category", backref=backref("budgets", lazy=True), init=False
+        "Category", back_populates="budgets", lazy=True, init=False
     )
 
     transaction_types: Mapped[str] = mapped_column(
@@ -109,9 +108,11 @@ class Budget(Base):
         subcategories: list[Category] = []
         if self.include_subcategories:
             # If this is a parent category, include subcategories
-            subcategories = Category.query.filter_by(
-                parent_id=self.category_id
-            ).all()
+            subcategories = (
+                db.session.query(Category)
+                .filter_by(parent_id=self.category_id)
+                .all()
+            )
             subcategory_ids: list[int] = [subcat.id for subcat in subcategories]
 
             # Include the parent category itself and all subcategories
@@ -126,12 +127,16 @@ class Budget(Base):
             category_filter = Expense.category_id == self.category_id
 
         # Get all expenses that match our criteria
-        expenses: list[Expense] = Expense.query.filter(
-            Expense.user_id == self.user_id,
-            Expense.date >= start_date,
-            Expense.date <= end_date,
-            category_filter,
-        ).all()
+        expenses: list[Expense] = (
+            db.session.query(Expense)
+            .filter(
+                Expense.user_id == self.user_id,
+                Expense.date >= start_date,
+                Expense.date <= end_date,
+                category_filter,
+            )
+            .all()
+        )
 
         # Calculate the total spent for these expenses
         total_spent = 0.0

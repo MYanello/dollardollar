@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, Optional, cast
 from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.orm import (
     Mapped,
-    backref,
     mapped_column,
     relationship,
 )
@@ -17,7 +16,15 @@ from .base import Base
 from .user import User
 
 if TYPE_CHECKING:
-    from models import Account, Currency, Tag
+    from models import (
+        Account,
+        Category,
+        CategorySplit,
+        Currency,
+        Group,
+        RecurringExpense,
+        Tag,
+    )
 
 
 class Expense(Base):
@@ -82,12 +89,12 @@ class Expense(Base):
         "Tag",
         secondary=expense_tags,
         lazy="subquery",
-        backref=backref("expenses", lazy=True),
+        back_populates="expenses",
         default_factory=list,
     )
 
     currency: Mapped[Optional["Currency"]] = relationship(
-        "Currency", backref=backref("expenses", lazy=True), default=None
+        "Currency", back_populates="expenses", lazy=True, init=False
     )
     external_id: Mapped[Optional[str]] = mapped_column(
         String(200), nullable=True, default=None
@@ -99,7 +106,8 @@ class Expense(Base):
     account: Mapped[Optional["Account"]] = relationship(
         "Account",
         foreign_keys=[account_id],
-        backref=backref("expenses", lazy=True),
+        back_populates="expenses",
+        lazy=True,
         default=None,
     )
 
@@ -112,7 +120,8 @@ class Expense(Base):
     destination_account: Mapped[Optional["Account"]] = relationship(
         "Account",
         foreign_keys=[destination_account_id],
-        backref=backref("incoming_transfers", lazy=True),
+        back_populates="incoming_transfers",
+        lazy=True,
         default=None,
     )
 
@@ -121,6 +130,34 @@ class Expense(Base):
 
     date: Mapped[datetime] = mapped_column(
         nullable=False, default=datetime.now(tz.utc)
+    )
+
+    category: Mapped["Category"] = relationship(
+        "Category", back_populates="expenses", lazy=True, init=False
+    )
+
+    category_splits: Mapped[Optional["CategorySplit"]] = relationship(
+        "CategorySplit",
+        back_populates="expense",
+        cascade="all, delete-orphan",
+        lazy=True,
+        init=False,
+    )
+
+    group: Mapped["Group"] = relationship(
+        "Group", back_populates="expenses", lazy=True, init=False
+    )
+
+    user: Mapped["User"] = relationship(
+        "User", back_populates="expenses", lazy=True, init=False
+    )
+
+    recurring_source: Mapped["RecurringExpense"] = relationship(
+        "RecurringExpense",
+        back_populates="expenses",
+        foreign_keys=[recurring_id],
+        lazy=True,
+        init=False,
     )
 
     @property

@@ -1,11 +1,14 @@
 from datetime import datetime
 from datetime import timezone as tz
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from sqlalchemy import String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+
+if TYPE_CHECKING:
+    from models import Account, Expense, RecurringExpense, User
 
 
 class Currency(Base):
@@ -25,6 +28,22 @@ class Currency(Base):
         default=False
     )  # Whether this is the base currency
     last_updated: Mapped[datetime] = mapped_column(default=datetime.now(tz.utc))
+
+    accounts: Mapped[list["Account"]] = relationship(
+        "Account", back_populates="currency", lazy=True, init=False
+    )
+
+    users: Mapped[list["User"]] = relationship(
+        "User", back_populates="default_currency", lazy=True, init=False
+    )
+
+    expenses: Mapped[list["Expense"]] = relationship(
+        "Expense", back_populates="currency", lazy=True, init=False
+    )
+
+    recurring_expenses: Mapped[list["RecurringExpense"]] = relationship(
+        "RecurringExpense", back_populates="currency", lazy=True, init=False
+    )
 
     def __repr__(self) -> str:
         """Return string representation of Currency information."""

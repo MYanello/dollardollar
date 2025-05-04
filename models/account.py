@@ -4,15 +4,16 @@ from typing import TYPE_CHECKING, ClassVar, Optional
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import (
     Mapped,
-    backref,
     mapped_column,
     relationship,
 )
 
+from models.expense import Expense
+
 from .base import Base
 
 if TYPE_CHECKING:
-    from models import Currency, User
+    from models import Currency, RecurringExpense, User
 
 
 class Account(Base):
@@ -43,12 +44,12 @@ class Account(Base):
         String(50), default=None
     )
     # Relationships
-    user: Mapped[Optional["User"]] = relationship(
-        "User", backref=backref("accounts", lazy=True), init=False
+    user: Mapped["User"] = relationship(
+        "User", back_populates="accounts", lazy=True, init=False
     )
 
     currency: Mapped[Optional["Currency"]] = relationship(
-        "Currency", backref=backref("accounts", lazy=True), init=False
+        "Currency", back_populates="accounts", lazy=True, init=False
     )
 
     external_id: Mapped[Optional[str]] = mapped_column(
@@ -59,6 +60,40 @@ class Account(Base):
     )  # Add this line too for 'active'/'inactive' status
 
     balance: Mapped[float] = mapped_column(default=0.0)
+
+    expenses: Mapped[list["Expense"]] = relationship(
+        "Expense",
+        back_populates="account",
+        foreign_keys=[Expense.account_id],
+        lazy=True,
+        init=False,
+    )
+
+    incoming_transfers: Mapped[list["Expense"]] = relationship(
+        "Expense",
+        back_populates="destination_account",
+        foreign_keys=[Expense.destination_account_id],
+        lazy=True,
+        init=False,
+    )
+
+    recurring_expenses: Mapped[list["RecurringExpense"]] = relationship(
+        "RecurringExpense",
+        back_populates="account",
+        foreign_keys="RecurringExpense.account_id",
+        lazy=True,
+        init=False,
+    )
+
+    recurring_incoming_transfers: Mapped[list["RecurringExpense"]] = (
+        relationship(
+            "RecurringExpense",
+            back_populates="destination_account",
+            foreign_keys="RecurringExpense.destination_account_id",
+            lazy=True,
+            init=False,
+        )
+    )
 
     def __repr__(self) -> str:
         """Return string representation of account information."""

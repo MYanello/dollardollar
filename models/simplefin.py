@@ -3,7 +3,7 @@ from datetime import timezone as tz
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import ForeignKey, String, Text
-from sqlalchemy.orm import Mapped, backref, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
 
@@ -33,10 +33,8 @@ class SimpleFinSettings(Base):
     )
     temp_accounts: Mapped[Optional[str]] = mapped_column(default=None)
     # Relationship with User
-    user: Mapped[Optional["User"]] = relationship(
-        "User",
-        backref=backref("SimpleFin", uselist=False, lazy=True),
-        default=None,
+    user: Mapped["User"] = relationship(
+        "User", back_populates="simplefin", uselist=False, lazy=True, init=False
     )
 
     def __repr__(self) -> str:

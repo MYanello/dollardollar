@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, Optional
 from sqlalchemy import ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import (
     Mapped,
-    backref,
     mapped_column,
     relationship,
 )
@@ -62,15 +61,16 @@ class RecurringExpense(Base):
     )  # Track last created instance
 
     # Relationships
-    user: Mapped[Optional["User"]] = relationship(
-        "User", backref=backref("recurring_expenses", lazy=True), default=None
+    user: Mapped["User"] = relationship(
+        "User", back_populates="recurring_expenses", lazy=True, init=False
     )
     group: Mapped[Optional["Group"]] = relationship(
-        "Group", backref=backref("recurring_expenses", lazy=True), default=None
+        "Group", back_populates="recurring_expenses", lazy=True, init=False
     )
     expenses: Mapped[list["Expense"]] = relationship(
         "Expense",
-        backref=backref("recurring_source", lazy=True),
+        back_populates="recurring_source",
+        lazy=True,
         foreign_keys="Expense.recurring_id",
         default_factory=list,
     )
@@ -81,17 +81,13 @@ class RecurringExpense(Base):
         default=None
     )  # Amount in original currency
     currency: Mapped[Optional["Currency"]] = relationship(
-        "Currency",
-        backref=backref("recurring_expenses", lazy=True),
-        default=None,
+        "Currency", back_populates="recurring_expenses", lazy=True, init=False
     )
     category_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("categories.id"), default=None
     )
     category: Mapped[Optional["Category"]] = relationship(
-        "Category",
-        backref=backref("recurring_expenses", lazy=True),
-        default=None,
+        "Category", back_populates="recurring_expenses", lazy=True, init=False
     )
     account_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("accounts.id", name="fk_recurring_account"),
@@ -100,8 +96,9 @@ class RecurringExpense(Base):
     account: Mapped[Optional["Account"]] = relationship(
         "Account",
         foreign_keys=[account_id],
-        backref=backref("recurring_expenses", lazy=True),
-        default=None,
+        back_populates="recurring_expenses",
+        lazy=True,
+        init=False,
     )
 
     # For transfers
@@ -111,8 +108,9 @@ class RecurringExpense(Base):
     destination_account: Mapped[Optional["Account"]] = relationship(
         "Account",
         foreign_keys=[destination_account_id],
-        backref=backref("recurring_incoming_transfers", lazy=True),
-        default=None,
+        back_populates="recurring_incoming_transfers",
+        lazy=True,
+        init=False,
     )
     # Transaction type and account fields
     transaction_type: Mapped[str] = mapped_column(
@@ -175,8 +173,8 @@ class IgnoredRecurringPattern(Base):
     )
 
     # Relationship with User
-    user: Mapped[Optional["User"]] = relationship(
-        "User", backref=backref("ignored_patterns", lazy=True), default=None
+    user: Mapped["User"] = relationship(
+        "User", back_populates="ignored_patterns", lazy=True, init=False
     )
 
     # Ensure user can't ignore the same pattern twice
