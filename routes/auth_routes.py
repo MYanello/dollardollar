@@ -28,7 +28,6 @@ from services.helpers import (
 )
 from services.wrappers import login_required_dev, restrict_demo_access
 from session_timeout import DemoTimeout
-from simplefin_client import SimpleFin
 
 auth_bp = Blueprint("auth", __name__)
 
