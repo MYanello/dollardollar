@@ -1,9 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Any
 
 from flask import Blueprint, render_template
 from flask_login import current_user
 from sqlalchemy import or_
 
+from database import db
 from models import Category, Currency, Expense, Group, User
 from services.helpers import (
     calculate_asset_debt_trends,
@@ -19,16 +21,17 @@ from tables import group_users
 dashboard_bp = Blueprint("dashboard", __name__)
 
 
-@dashboard_bp.route("/dashboard")
+@dashboard_bp.route("/")
 @login_required_dev
 @demo_time_limited
-def dashboard():
-    now = datetime.now()
-    base_currency = get_base_currency()
+def dashboard() -> str:  # noqa: C901, PLR0912, PLR0915
+    now: datetime = datetime.now(timezone.utc)
+    base_currency: dict[str, str] = get_base_currency()
     # Fetch all expenses where the user is either
     # the creator or a split participant
-    expenses = (
-        Expense.query.filter(
+    expenses: list[Expense] = (
+        db.session.query(Expense)
+        .filter(
             or_(
                 Expense.user_id == current_user.id,
                 Expense.split_with.like(f"%{current_user.id}%"),
@@ -38,20 +41,21 @@ def dashboard():
         .all()
     )
 
-    users = User.query.all()
-    groups = (
-        Group.query.join(group_users)
+    users: list[User] = db.session.query(User).all()
+    groups: list[Group] = (
+        db.session.query(Group)
+        .join(group_users)
         .filter(group_users.c.user_id == current_user.id)
         .all()
     )
 
     # Pre-calculate expense splits to avoid repeated calculations in template
-    expense_splits = {}
+    expense_splits: dict[int, Any] = {}
     for expense in expenses:
         expense_splits[expense.id] = expense.calculate_splits()
 
     # Calculate monthly totals with contributors
-    monthly_totals = {}
+    monthly_totals: dict[str, dict[str, Any]] = {}
     if expenses:
         for expense in expenses:
             month_key = expense.date.strftime("%Y-%m")
@@ -63,7 +67,7 @@ def dashboard():
                     "by_account": {},  # New: track by account
                 }
 
-            # Add to total - MODIFIED: Only add expenses, not income or transfers
+            # Add to total, MODIFIED: Only add expenses, not income or transfers
             if (
                 not hasattr(expense, "transaction_type")
                 or expense.transaction_type == "expense"
@@ -126,17 +130,19 @@ def dashboard():
 
     # Calculate total expenses for current user
     # (only their portions for the current year)
-    current_year = now.year
+    current_year: int = now.year
     total_expenses = 0
     total_expenses_only = 0  # NEW: For expenses only
     # Add these calculations for income and transfers
     total_income = 0
     total_transfers = 0
-    monthly_labels = []
-    monthly_amounts = []
+    monthly_labels: list[str] = []
+    monthly_amounts: list[float] = []
 
     # Sort monthly totals to ensure chronological order
-    sorted_monthly_totals = sorted(monthly_totals.items(), key=lambda x: x[0])
+    sorted_monthly_totals: list[tuple[str, dict[str, Any]]] = sorted(
+        monthly_totals.items(), key=lambda x: x[0]
+    )
 
     for month, data in sorted_monthly_totals:
         monthly_labels.append(month)
@@ -150,17 +156,19 @@ def dashboard():
                 total_transfers += expense.amount
 
     # Calculate derived metrics
-    net_cash_flow = total_income - total_expenses_only
+    net_cash_flow: float | int = total_income - total_expenses_only
 
     # Calculate savings rate if income is not zero
-    savings_rate = net_cash_flow / total_income * 100 if total_income > 0 else 0
+    savings_rate: float = (
+        net_cash_flow / total_income * 100 if total_income > 0 else 0
+    )
     for expense in expenses:
         # Skip if not in current year
         if expense.date.year != current_year:
             continue
 
         # NEW: Check if it's an expense
-        is_expense = (
+        is_expense: bool = (
             not hasattr(expense, "transaction_type")
             or expense.transaction_type == "expense"
         )
@@ -233,11 +241,11 @@ def dashboard():
     }
 
     # Calculate balances using the settlements method
-    balances = calculate_balances(current_user.id)
+    balances: list = calculate_balances(current_user.id)
 
     # Sort into "you owe" and "you are owed" categories
-    you_owe = []
-    you_are_owed = []
+    you_owe: list[dict[str, Any]] = []
+    you_are_owed: list[dict[str, Any]] = []
     net_balance = 0
 
     for balance in balances:
@@ -265,7 +273,7 @@ def dashboard():
             net_balance += balance["amount"]
 
     # Create IOU data in the format the dashboard template expects
-    iou_data = {
+    iou_data: dict[str, Any] = {
         "owes_me": {
             user["id"]: {"name": user["name"], "amount": user["amount"]}
             for user in you_are_owed
@@ -277,17 +285,20 @@ def dashboard():
         "net_balance": net_balance,
     }
 
-    budget_summary = get_budget_summary()
+    budget_summary: dict[str, Any] = get_budget_summary()
 
-    categories = (
-        Category.query.filter_by(user_id=current_user.id)
+    categories: list[Category] = (
+        db.session.query(Category)
+        .filter_by(user_id=current_user.id)
         .order_by(Category.name)
         .all()
     )
-    currencies = Currency.query.all()
+    currencies: list[Currency] = db.session.query(Currency).all()
 
     # Calculate asset and debt trends
-    asset_debt_trends = calculate_asset_debt_trends(current_user)
+    asset_debt_trends: dict[str, Any] = calculate_asset_debt_trends(
+        current_user
+    )
 
     base_currency = get_base_currency()
 
