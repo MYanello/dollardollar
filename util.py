@@ -84,7 +84,8 @@ def auto_categorize_transaction(description, user_id):
 
     # Get all active category mappings for the user
     mappings = (
-        CategoryMapping.query.filter_by(user_id=user_id, active=True)
+        db.session.query(CategoryMapping)
+        .filter_by(user_id=user_id, active=True)
         .order_by(
             CategoryMapping.priority.desc(), CategoryMapping.match_count.desc()
         )
