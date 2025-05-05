@@ -3,6 +3,7 @@ from datetime import timezone as tz
 
 from flask import (
     Blueprint,
+    abort,
     current_app,
     flash,
     jsonify,
@@ -12,8 +13,9 @@ from flask import (
     url_for,
 )
 from flask_login import current_user
+from werkzeug import Response
 
-from extensions import db
+from database import db
 from models import Currency
 from services.wrappers import login_required, login_required_dev
 from update_currencies import update_currency_rates
@@ -21,42 +23,47 @@ from update_currencies import update_currency_rates
 currency_bp = Blueprint("currency", __name__)
 
 
-@currency_bp.route("/currencies")
+@currency_bp.route("/")
 @login_required_dev
-def manage_currencies():
-    currencies = Currency.query.all()
+def manage_currencies() -> str:
+    currencies: list[Currency] = db.session.query(Currency).all()
     return render_template("currencies.html", currencies=currencies)
 
 
-@currency_bp.route("/currencies/add", methods=["POST"])
+@currency_bp.route("/add", methods=["POST"])
 @login_required_dev
-def add_currency():
+def add_currency() -> Response:
     if not current_user.is_admin:
         flash("Only administrators can add currencies")
-        return redirect(url_for("manage_currencies"))
+        return redirect(url_for("currency.manage_currencies"))
 
-    code = request.form.get("code", "").upper()
-    name = request.form.get("name")
-    symbol = request.form.get("symbol")
+    code: str = request.form.get("code", "").upper()
+    name: str = request.form.get("name")  # type: ignore[]
+    symbol: str = request.form.get("symbol")  # type: ignore[]
     rate_to_base = float(request.form.get("rate_to_base", 1.0))
-    is_base = request.form.get("is_base") == "on"
+    is_base: bool = request.form.get("is_base") == "on"
 
     # Validate currency code format
-    if not code or len(code) != 3 or not code.isalpha():
+    if not code or len(code) != 3 or not code.isalpha():  # noqa: PLR2004
         flash(
-            "Invalid currency code. Please use 3-letter ISO currency code (e.g., USD, EUR, GBP)"
+            "Invalid currency code. Please use 3-letter ISO currency code "
+            "(e.g., USD, EUR, GBP)"
         )
-        return redirect(url_for("manage_currencies"))
+        return redirect(url_for("currency.manage_currencies"))
 
     # Check if currency already exists
-    existing = Currency.query.filter_by(code=code).first()
+    existing: Currency | None = (
+        db.session.query(Currency).filter_by(code=code).first()
+    )
     if existing:
         flash(f"Currency {code} already exists")
-        return redirect(url_for("manage_currencies"))
+        return redirect(url_for("currency.manage_currencies"))
 
     # If setting as base, update all existing base currencies
     if is_base:
-        for currency in Currency.query.filter_by(is_base=True).all():
+        for currency in (
+            db.session.query(Currency).filter_by(is_base=True).all()
+        ):
             currency.is_base = False
 
     # Create new currency
@@ -76,17 +83,21 @@ def add_currency():
         db.session.rollback()
         flash(f"Error adding currency: {e!s}")
 
-    return redirect(url_for("manage_currencies"))
+    return redirect(url_for("currency.manage_currencies"))
 
 
-@currency_bp.route("/currencies/update/<code>", methods=["POST"])
+@currency_bp.route("/update/<code>", methods=["POST"])
 @login_required_dev
 def update_currency(code):
     if not current_user.is_admin:
         flash("Only administrators can update currencies")
-        return redirect(url_for("manage_currencies"))
+        return redirect(url_for("currency.manage_currencies"))
 
-    currency = Currency.query.filter_by(code=code).first_or_404()
+    currency: Currency | None = (
+        db.session.query(Currency).filter_by(code=code).first()
+    )
+    if not currency:
+        abort(404)
 
     # Update fields
     currency.name = request.form.get("name", currency.name)
@@ -94,11 +105,11 @@ def update_currency(code):
     currency.rate_to_base = float(
         request.form.get("rate_to_base", currency.rate_to_base)
     )
-    new_is_base = request.form.get("is_base") == "on"
+    new_is_base: bool = request.form.get("is_base") == "on"
 
     # If setting as base, update all existing base currencies
     if new_is_base and not currency.is_base:
-        for curr in Currency.query.filter_by(is_base=True).all():
+        for curr in db.session.query(Currency).filter_by(is_base=True).all():
             curr.is_base = False
 
     currency.is_base = new_is_base
@@ -111,12 +122,12 @@ def update_currency(code):
         db.session.rollback()
         flash(f"Error updating currency: {e!s}")
 
-    return redirect(url_for("manage_currencies"))
+    return redirect(url_for("currency.manage_currencies"))
 
 
-@currency_bp.route("/currencies/delete/<string:code>", methods=["DELETE"])
+@currency_bp.route("/delete/<string:code>", methods=["DELETE"])
 @login_required
-def delete_currency(code):
+def delete_currency(code) -> tuple[Response, int]:
     """Delete a currency from the system.
 
     Only accessible to admin users
@@ -132,7 +143,9 @@ def delete_currency(code):
 
     try:
         # Find the currency
-        currency = Currency.query.filter_by(code=code).first()
+        currency: Currency | None = (
+            db.session.query(Currency).filter_by(code=code).first()
+        )
 
         if not currency:
             return jsonify(
@@ -158,7 +171,7 @@ def delete_currency(code):
                 "success": True,
                 "message": f"Currency {code} deleted successfully.",
             }
-        )
+        ), 200
 
     except Exception:
         # Rollback in case of error
@@ -175,9 +188,9 @@ def delete_currency(code):
         ), 500
 
 
-@currency_bp.route("/currencies/set-base/<string:code>", methods=["POST"])
+@currency_bp.route("/set-base/<string:code>", methods=["POST"])
 @login_required
-def set_base_currency(code):
+def set_base_currency(code) -> Response:
     """Change the base currency.
 
     Only accessible to admin users
@@ -186,21 +199,25 @@ def set_base_currency(code):
     if not current_user.is_admin:
         flash("Unauthorized. Admin access required.", "error")
         return redirect(
-            url_for("manage_currencies")
+            url_for("currency.manage_currencies")
         )  # Changed 'currencies' to 'manage_currencies'
 
     try:
         # Find the currency to be set as base
-        new_base_currency = Currency.query.filter_by(code=code).first()
+        new_base_currency: Currency | None = (
+            db.session.query(Currency).filter_by(code=code).first()
+        )
 
         if not new_base_currency:
             flash(f"Currency {code} not found.", "error")
             return redirect(
-                url_for("manage_currencies")
+                url_for("currency.manage_currencies")
             )  # Changed 'currencies' to 'manage_currencies'
 
         # Find and unset the current base currency
-        current_base_currency = Currency.query.filter_by(is_base=True).first()
+        current_base_currency: Currency | None = (
+            db.session.query(Currency).filter_by(is_base=True).first()
+        )
 
         if current_base_currency:
             # Unset current base currency
@@ -235,13 +252,13 @@ def set_base_currency(code):
         flash("An error occurred while changing the base currency.", "error")
 
     return redirect(
-        url_for("manage_currencies")
+        url_for("currency.manage_currencies")
     )  # Changed 'currencies' to 'manage_currencies'
 
 
 @currency_bp.route("/update_currency_rates", methods=["POST"])
 @login_required_dev
-def update_rates_route():
+def update_rates_route() -> Response:
     """Update currency rates."""
     if not current_user.is_admin:
         flash("Only administrators can update currency rates")
@@ -254,23 +271,25 @@ def update_rates_route():
     else:
         flash("Error updating currency rates. Check the logs for details.")
 
-    return redirect(url_for("manage_currencies"))
+    return redirect(url_for("currency.manage_currencies"))
 
 
 @currency_bp.route("/set_default_currency", methods=["POST"])
 @login_required_dev
-def set_default_currency():
-    currency_code = request.form.get("default_currency")
+def set_default_currency() -> Response:
+    currency_code: str | None = request.form.get("default_currency")
 
     # Verify currency exists
-    currency = Currency.query.filter_by(code=currency_code).first()
+    currency: Currency | None = (
+        db.session.query(Currency).filter_by(code=currency_code).first()
+    )
     if not currency:
         flash("Invalid currency selected")
-        return redirect(url_for("manage_currencies"))
+        return redirect(url_for("currency.manage_currencies"))
 
     # Update user's default currency
     current_user.default_currency_code = currency_code
     db.session.commit()
 
     flash(f"Default currency set to {currency.code} ({currency.symbol})")
-    return redirect(url_for("manage_currencies"))
+    return redirect(url_for("currency.manage_currencies"))
