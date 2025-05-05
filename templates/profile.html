@@ -52,7 +52,7 @@
                     <h5 class="mb-0">My Color</h5>
                 </div>
                 <div class="card-body">
-                    <form action="{{ url_for('update_color') }}" method="POST">
+                    <form action="{{ url_for('user.update_color') }}" method="POST">
                         <div class="mb-3">
                             <label for="user_color" class="form-label">Personal Color</label>
                             <div class="input-group">
@@ -75,7 +75,7 @@
                     <h5 class="mb-0">Change Password</h5>
                 </div>
                 <div class="card-body">
-                    <form action="{{ url_for('change_password') }}" method="POST">
+                    <form action="{{ url_for('user.change_password') }}" method="POST">
                         <div class="mb-3">
                             <label for="current_password" class="form-label">Current Password</label>
                             <input type="password" class="form-control bg-dark text-light" id="current_password" name="current_password" required>
@@ -124,7 +124,7 @@
         <h5 class="mb-0">Timezone Preferences</h5>
     </div>
     <div class="card-body">
-        <form action="{{ url_for('update_timezone') }}" method="POST">
+        <form action="{{ url_for('timezone.update_timezone') }}" method="POST">
             <div class="mb-3">
                 <label for="timezone" class="form-label">Select Your Timezone</label>
                 <select class="form-select bg-dark text-light" name="timezone" id="timezone" required>
@@ -190,7 +190,7 @@
                     <h5 class="mb-0">Default Currency</h5>
                 </div>
                 <div class="card-body">
-                    <form action="{{ url_for('set_default_currency') }}" method="POST">
+                    <form action="{{ url_for('currency.set_default_currency') }}" method="POST">
                         <div class="mb-3">
                             <label for="default_currency" class="form-label">Select Your Default Currency</label>
                             <select class="form-select bg-dark text-light" name="default_currency" id="default_currency" required>
@@ -216,7 +216,7 @@
                     <h5 class="mb-0">Email Notifications</h5>
                 </div>
                 <div class="card-body">
-                    <form action="{{ url_for('update_notification_preferences') }}" method="POST">
+                    <form action="{{ url_for('maintenance.update_notification_preferences') }}" method="POST">
                         <div class="form-check mb-3">
                             <input type="checkbox" class="form-check-input" id="monthly_report_enabled" name="monthly_report_enabled" 
                                 {% if current_user.monthly_report_enabled %}checked{% endif %}>
