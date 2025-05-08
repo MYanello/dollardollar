@@ -1,4 +1,4 @@
-<document_content>{% extends 'base.html' %}
+{% extends 'base.html' %}
     {% block content %}
     <div class="container py-5">
         <div class="row justify-content-center">
@@ -74,7 +74,7 @@
                         </div>
                     </div>
                     
-                    <a href="{{ url_for('demo_login') }}" class="btn btn-primary">Try Again</a>
+                    <a href="{{ url_for('demo.login') }}" class="btn btn-primary">Try Again</a>
                 </div>
                 <div class="card-footer text-muted">
                     Thank you for your interest in Dollar Dollar Bill Y'all!
@@ -84,4 +84,3 @@
     </div>
     </div>
     {% endblock %}
-    </document_content>

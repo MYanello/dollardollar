@@ -1,10 +1,11 @@
 import base64
 from datetime import datetime, timedelta
+from logging import Logger
 
 from flask import current_app, request
 from flask_login import current_user
 from flask_mail import Message
-from sqlalchemy import func, or_
+from sqlalchemy import delete, func, or_
 
 from database import db
 from extensions import mail
@@ -23,6 +24,7 @@ from models import (
     Tag,
     User,
 )
+from tables import expense_tags
 
 
 def get_category_spending(expenses, expense_splits):
@@ -808,20 +810,22 @@ def reset_demo_data(user_id):
     """Reset all demo data for a user with comprehensive relationship handling."""
     import logging
 
-    logger = logging.getLogger(__name__)
+    logger: Logger = logging.getLogger(__name__)
     logger.info("Resetting demo data for user %s", {user_id})
 
     try:
         # Start a transaction
-        db.session.begin()
+        # db.session.begin()
 
         # 1. Get all expenses for this user
-        expenses = db.session.query(Expense).filter_by(user_id=user_id).all()
-        expense_ids = [expense.id for expense in expenses]
+        expenses: list[Expense] = (
+            db.session.query(Expense).filter_by(user_id=user_id).all()
+        )
+        expense_ids: list[int] = [expense.id for expense in expenses]
 
         # 2. Delete category splits referencing these expenses
         if expense_ids:
-            split_count = (
+            split_count: int = (
                 db.session.query(CategorySplit)
                 .filter(CategorySplit.expense_id.in_(expense_ids))
                 .delete(synchronize_session=False)
@@ -830,29 +834,20 @@ def reset_demo_data(user_id):
 
         # 3. Delete tags associations for these expenses
         if expense_ids:
-            from sqlalchemy import text
-
-            db.session.execute(
-                text("""
-                DELETE FROM expense_tags 
-                WHERE expense_id IN :expense_ids
-            """),
-                {
-                    "expense_ids": tuple(expense_ids)
-                    if len(expense_ids) > 1
-                    else f"({expense_ids[0]})"
-                },
+            delete(expense_tags).where(
+                expense_tags.c.expense_id.in_(expense_ids)
             )
+
             logger.info("Deleted expense tag associations")
 
         # 4. Now delete expenses
-        expense_count = (
+        expense_count: int = (
             db.session.query(Expense).filter_by(user_id=user_id).delete()
         )
         logger.info("Deleted %s expenses", {expense_count})
 
         # 5. Delete recurring expenses
-        recurring_count = (
+        recurring_count: int = (
             db.session.query(RecurringExpense)
             .filter_by(user_id=user_id)
             .delete()
@@ -860,13 +855,13 @@ def reset_demo_data(user_id):
         logger.info("Deleted %s recurring expenses", {recurring_count})
 
         # 6. Delete budgets
-        budget_count = (
+        budget_count: int = (
             db.session.query(Budget).filter_by(user_id=user_id).delete()
         )
         logger.info("Deleted %s budgets", {budget_count})
 
         # 7. Delete category mappings
-        mapping_count = (
+        mapping_count: int = (
             db.session.query(CategoryMapping)
             .filter_by(user_id=user_id)
             .delete()
@@ -874,7 +869,7 @@ def reset_demo_data(user_id):
         logger.info("Deleted %s category mappings", {mapping_count})
 
         # 8. Delete ignored patterns
-        pattern_count = (
+        pattern_count: int = (
             db.session.query(IgnoredRecurringPattern)
             .filter_by(user_id=user_id)
             .delete()
@@ -882,15 +877,16 @@ def reset_demo_data(user_id):
         logger.info("Deleted %s ignored patterns", {pattern_count})
 
         # 9. Delete SimpleFin settings
-        simplefin_count = (
-            db.session.query(SimpleFin).filter_by(user_id=user_id).delete()
+        simplefin_count: int = (
+            db.session.query(SimpleFinSettings)
+            .filter_by(user_id=user_id)
+            .delete()
         )
         logger.info("Deleted %s SimpleFin settings", {simplefin_count})
 
         # 10. Delete settlements
-        from sqlalchemy import or_
 
-        settlement_count = (
+        settlement_count: int = (
             db.session.query(Settlement)
             .filter(
                 or_(
@@ -903,17 +899,19 @@ def reset_demo_data(user_id):
         logger.info("Deleted %s settlements", {settlement_count})
 
         # 11. Delete all accounts
-        account_count = (
+        account_count: int = (
             db.session.query(Account).filter_by(user_id=user_id).delete()
         )
         logger.info("Deleted %s accounts", {account_count})
 
         # 12. Delete all tags
-        tag_count = db.session.query(Tag).filter_by(user_id=user_id).delete()
+        tag_count: int = (
+            db.session.query(Tag).filter_by(user_id=user_id).delete()
+        )
         logger.info("Deleted %s tags", {tag_count})
 
         # 13. Delete all categories
-        category_count = (
+        category_count: int = (
             db.session.query(Category).filter_by(user_id=user_id).delete()
         )
         logger.info("Deleted %s categories", {category_count})
@@ -921,11 +919,12 @@ def reset_demo_data(user_id):
         # Commit the transaction
         db.session.commit()
         logger.info("Demo data reset successful")
-        return True
     except Exception:
         db.session.rollback()
         logger.exception("Error resetting demo data")
         return False
+    else:
+        return True
 
 
 def sync_simplefin_for_user(user_id):

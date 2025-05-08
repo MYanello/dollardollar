@@ -118,7 +118,9 @@ class DemoTimeout:
                 ).timestamp()
 
             # Check if session has expired
-            start_time = datetime.fromtimestamp(session["demo_start_time"])
+            start_time: datetime = datetime.fromtimestamp(
+                session["demo_start_time"], tz=timezone.utc
+            )
             if datetime.now(timezone.utc) > start_time + timedelta(
                 minutes=self.timeout_minutes
             ):
@@ -139,7 +141,7 @@ class DemoTimeout:
                     "Your demo session has expired. "
                     " Thank you for trying our application!"
                 )
-                return redirect(url_for("demo_login"))
+                return redirect(url_for("demo.login"))
         return None
 
     def update_last_active(self, response):
@@ -180,7 +182,7 @@ class DemoTimeout:
             return self.timeout_minutes * 60
 
         start_time: datetime = datetime.fromtimestamp(
-            session["demo_start_time"]
+            session["demo_start_time"], tz=timezone.utc
         )
         end_time: datetime = start_time + timedelta(
             minutes=self.timeout_minutes
@@ -213,7 +215,7 @@ def demo_time_limited(f):
                 # Check if session has expired
                 if "demo_start_time" in session:
                     start_time: datetime = datetime.fromtimestamp(
-                        session["demo_start_time"]
+                        session["demo_start_time"], tz=timezone.utc
                     )
                     if datetime.now(timezone.utc) > start_time + timedelta(
                         minutes=timeout_minutes

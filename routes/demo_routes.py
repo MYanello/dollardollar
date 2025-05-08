@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timedelta, timezone
+from logging import Logger
 
 from flask import (
     Blueprint,
@@ -11,58 +12,63 @@ from flask import (
     url_for,
 )
 from flask_login import login_user
+from werkzeug import Response
 
-from extensions import db
+from database import db
 from models import (
     Account,
     Budget,
     Category,
-    CategoryMapping,
     CategorySplit,
     Expense,
-    IgnoredRecurringPattern,
     RecurringExpense,
-    Settlement,
-    Tag,
     User,
 )
-from routes.auth_routes import home
-from simplefin_client import SimpleFin
+from services.defaults import create_default_categories
+from services.helpers import reset_demo_data
+from session_timeout import DemoTimeout
 
 demo_bp = Blueprint("demo", __name__)
 
 
 @demo_bp.route("/demo")
 @demo_bp.route("/")
-def demo_login():
+def login() -> str | Response:
     """Auto-login as demo user with session timeout."""
     import logging
 
-    logger = logging.getLogger(__name__)
+    logger: Logger = logging.getLogger(__name__)
 
     # Check if demo mode is enabled
     if os.getenv("DEMO_MODE", "False").lower() != "true":
         # If demo mode is not enabled, use default route
-        return home()
+        return url_for("auth.home")
 
     # Get demo timeout instance
-    demo_timeout = current_app.extensions.get("demo_timeout")
+    demo_timeout: DemoTimeout | None = current_app.extensions.get(
+        "demo_timeout"
+    )
+    if not demo_timeout:
+        flash("DemoTimeout was not found in app extensions", "error")
+        return url_for("auth.home")
 
     # Check concurrent session limit
-    max_sessions = int(os.getenv("MAX_CONCURRENT_DEMO_SESSIONS", 5))
-    current_sessions = (
-        demo_timeout.get_active_demo_sessions()
-    )  # Remove 'if demo_timeout else 0'
+    max_sessions = int(os.getenv("MAX_CONCURRENT_DEMO_SESSIONS", "5"))
+    current_sessions: int = (
+        demo_timeout.get_active_demo_sessions() if demo_timeout else 0
+    )
 
     if current_sessions >= max_sessions:
         flash(
             f"Maximum number of demo sessions ({max_sessions}) has been "
             f"reached. Please try again later."
         )
-        return redirect(url_for("demo_max_users"))
+        return redirect(url_for("demo.max_users"))
 
     # Find or create demo user
-    demo_user = User.query.filter_by(id="demo@example.com").first()
+    demo_user: User | None = (
+        db.session.query(User).filter_by(id="demo@example.com").first()
+    )
     if not demo_user:
         logger.info("Creating new demo user")
         demo_user = User(
@@ -80,21 +86,21 @@ def demo_login():
             f"Maximum number of demo sessions ({max_sessions}) has been "
             f"reached. Please try again later."
         )
-        return redirect(url_for("login"))
+        return redirect(url_for("auth.login"))
 
     # Always reset demo data for each new session
     logger.info("Resetting demo data for new session")
     reset_demo_data(demo_user.id)
 
     # Create demo data
-    result = create_demo_data(demo_user.id)
+    result: bool = create_demo_data(demo_user.id)
     logger.info("Demo data creation result: %s", result)
 
     # Login as demo user
     login_user(demo_user)
 
     # Set demo start time and expiry time
-    demo_timeout_minutes = int(os.getenv("DEMO_TIMEOUT_MINUTES", 10))
+    demo_timeout_minutes = int(os.getenv("DEMO_TIMEOUT_MINUTES", "10"))
     session["demo_start_time"] = datetime.now(timezone.utc).timestamp()
     session["demo_expiry_time"] = (
         datetime.now(timezone.utc) + timedelta(minutes=demo_timeout_minutes)
@@ -105,33 +111,33 @@ def demo_login():
         f"{demo_timeout_minutes} minutes."
     )
 
-    return redirect(url_for("dashboard"))
+    return redirect(url_for("dashboard.dashboard"))
 
 
 @demo_bp.route("/demo_max_users")
-def demo_max_users():
+def demo_max_users() -> str:
     return render_template("demo/demo_concurrent.html")
 
 
 @demo_bp.route("/demo_expired")
-def demo_expired():
+def demo_expired() -> str:
     """Handle expired demo sessions."""
     return render_template("demo/demo_expired.html")
 
 
 @demo_bp.route("/demo-thanks")
-def demo_thanks():
+def demo_thanks() -> str:
     """Page to thank users after demo session."""
     return render_template("demo/demo_thanks.html")
 
 
 # Demo data creation function
-def create_demo_data(user_id):
+def create_demo_data(user_id) -> bool:  # noqa: C901, PLR0912, PLR0915
     """Create comprehensive sample data for demo users with proper checking."""
     import logging
     from datetime import datetime, timedelta
 
-    logger = logging.getLogger(__name__)
+    logger: Logger = logging.getLogger(__name__)
     logger.info("Starting demo data creation for user %s", {user_id})
 
     # First create default categories
@@ -139,17 +145,23 @@ def create_demo_data(user_id):
     db.session.flush()
 
     # Check if demo data already exists
-    existing_accounts = Account.query.filter_by(user_id=user_id).all()
+    existing_accounts: list[Account] = (
+        db.session.query(Account).filter_by(user_id=user_id).all()
+    )
     if existing_accounts:
         logger.info(
-            f"Found {len(existing_accounts)} existing accounts for user {user_id}"
+            "Found %d existing accounts for user %s",
+            len(existing_accounts),
+            user_id,
         )
         # We'll still continue to create any missing data
 
     # Create sample accounts if they don't exist
-    checking = Account.query.filter_by(
-        name="Demo Checking", user_id=user_id
-    ).first()
+    checking: Account | None = (
+        db.session.query(Account)
+        .filter_by(name="Demo Checking", user_id=user_id)
+        .first()
+    )
     if not checking:
         logger.info("Creating demo checking account")
         checking = Account(
@@ -162,9 +174,11 @@ def create_demo_data(user_id):
         )
         db.session.add(checking)
 
-    savings = Account.query.filter_by(
-        name="Demo Savings", user_id=user_id
-    ).first()
+    savings: Account | None = (
+        db.session.query(Account)
+        .filter_by(name="Demo Savings", user_id=user_id)
+        .first()
+    )
     if not savings:
         logger.info("Creating demo savings account")
         savings = Account(
@@ -177,9 +191,11 @@ def create_demo_data(user_id):
         )
         db.session.add(savings)
 
-    credit = Account.query.filter_by(
-        name="Demo Credit Card", user_id=user_id
-    ).first()
+    credit: Account | None = (
+        db.session.query(Account)
+        .filter_by(name="Demo Credit Card", user_id=user_id)
+        .first()
+    )
     if not credit:
         logger.info("Creating demo credit card account")
         credit = Account(
@@ -192,9 +208,11 @@ def create_demo_data(user_id):
         )
         db.session.add(credit)
 
-    investment = Account.query.filter_by(
-        name="Demo Investment", user_id=user_id
-    ).first()
+    investment: Account | None = (
+        db.session.query(Account)
+        .filter_by(name="Demo Investment", user_id=user_id)
+        .first()
+    )
     if not investment:
         logger.info("Creating demo investment account")
         investment = Account(
@@ -210,24 +228,34 @@ def create_demo_data(user_id):
     db.session.flush()
 
     # Get categories
-    food_category = Category.query.filter_by(
-        name="Food", user_id=user_id
-    ).first()
-    housing_category = Category.query.filter_by(
-        name="Housing", user_id=user_id
-    ).first()
-    transportation_category = Category.query.filter_by(
-        name="Transportation", user_id=user_id
-    ).first()
-    entertainment_category = Category.query.filter_by(
-        name="Entertainment", user_id=user_id
-    ).first()
+    food_category: Category | None = (
+        db.session.query(Category)
+        .filter_by(name="Food", user_id=user_id)
+        .first()
+    )
+    housing_category: Category | None = (
+        db.session.query(Category)
+        .filter_by(name="Housing", user_id=user_id)
+        .first()
+    )
+    transportation_category: Category | None = (
+        db.session.query(Category)
+        .filter_by(name="Transportation", user_id=user_id)
+        .first()
+    )
+    entertainment_category: Category | None = (
+        db.session.query(Category)
+        .filter_by(name="Entertainment", user_id=user_id)
+        .first()
+    )
 
     # Create sample transactions if they don't exist
     # 1. Regular expenses
-    if not Expense.query.filter_by(
-        description="Grocery shopping", user_id=user_id
-    ).first():
+    if (
+        not db.session.query(Expense)
+        .filter_by(description="Grocery shopping", user_id=user_id)
+        .first()
+    ):
         logger.info("Creating demo grocery expense")
         expense1 = Expense(
             description="Grocery shopping",
@@ -245,9 +273,11 @@ def create_demo_data(user_id):
         )
         db.session.add(expense1)
 
-    if not Expense.query.filter_by(
-        description="Monthly rent", user_id=user_id
-    ).first():
+    if (
+        not db.session.query(Expense)
+        .filter_by(description="Monthly rent", user_id=user_id)
+        .first()
+    ):
         logger.info("Creating demo rent expense")
         expense2 = Expense(
             description="Monthly rent",
@@ -266,9 +296,11 @@ def create_demo_data(user_id):
         db.session.add(expense2)
 
     # 2. Income transactions
-    if not Expense.query.filter_by(
-        description="Salary deposit", user_id=user_id
-    ).first():
+    if (
+        not db.session.query(Expense)
+        .filter_by(description="Salary deposit", user_id=user_id)
+        .first()
+    ):
         logger.info("Creating demo salary income")
         income1 = Expense(
             description="Salary deposit",
@@ -286,9 +318,11 @@ def create_demo_data(user_id):
         )
         db.session.add(income1)
 
-    if not Expense.query.filter_by(
-        description="Side gig payment", user_id=user_id
-    ).first():
+    if (
+        not db.session.query(Expense)
+        .filter_by(description="Side gig payment", user_id=user_id)
+        .first()
+    ):
         logger.info("Creating demo side income")
         income2 = Expense(
             description="Side gig payment",
@@ -307,18 +341,24 @@ def create_demo_data(user_id):
         db.session.add(income2)
 
     # Add expenses with category splits
-    if not Expense.query.filter_by(
-        description="Shopping trip (mixed)", user_id=user_id
-    ).first():
+    if (
+        not db.session.query(Expense)
+        .filter_by(description="Shopping trip (mixed)", user_id=user_id)
+        .first()
+    ):
         logger.info("Creating demo category split expense - shopping")
 
         # Get additional categories
-        shopping_category = Category.query.filter_by(
-            name="Shopping", user_id=user_id
-        ).first()
-        personal_category = Category.query.filter_by(
-            name="Personal", user_id=user_id
-        ).first()
+        shopping_category: Category | None = (
+            db.session.query(Category)
+            .filter_by(name="Shopping", user_id=user_id)
+            .first()
+        )
+        personal_category: Category | None = (
+            db.session.query(Category)
+            .filter_by(name="Personal", user_id=user_id)
+            .first()
+        )
 
         # Create the main expense with has_category_splits=True
         split_expense1 = Expense(
@@ -368,9 +408,11 @@ def create_demo_data(user_id):
             db.session.add(cat_split3)
 
     # Add another split expense example - travel related
-    if not Expense.query.filter_by(
-        description="Weekend trip expenses", user_id=user_id
-    ).first():
+    if (
+        not db.session.query(Expense)
+        .filter_by(description="Weekend trip expenses", user_id=user_id)
+        .first()
+    ):
         logger.info("Creating demo category split expense - travel")
 
         # Create the main expense
@@ -422,9 +464,11 @@ def create_demo_data(user_id):
             db.session.add(cat_split6)
 
     # 3. Transfers between accounts
-    if not Expense.query.filter_by(
-        description="Transfer to savings", user_id=user_id
-    ).first():
+    if (
+        not db.session.query(Expense)
+        .filter_by(description="Transfer to savings", user_id=user_id)
+        .first()
+    ):
         logger.info("Creating demo transfer to savings")
         transfer1 = Expense(
             description="Transfer to savings",
@@ -443,9 +487,11 @@ def create_demo_data(user_id):
         )
         db.session.add(transfer1)
 
-    if not Expense.query.filter_by(
-        description="Credit card payment", user_id=user_id
-    ).first():
+    if (
+        not db.session.query(Expense)
+        .filter_by(description="Credit card payment", user_id=user_id)
+        .first()
+    ):
         logger.info("Creating demo credit card payment")
         transfer2 = Expense(
             description="Credit card payment",
@@ -464,9 +510,11 @@ def create_demo_data(user_id):
         )
         db.session.add(transfer2)
 
-    if not Expense.query.filter_by(
-        description="Investment contribution", user_id=user_id
-    ).first():
+    if (
+        not db.session.query(Expense)
+        .filter_by(description="Investment contribution", user_id=user_id)
+        .first()
+    ):
         logger.info("Creating demo investment transfer")
         transfer3 = Expense(
             description="Investment contribution",
@@ -486,9 +534,11 @@ def create_demo_data(user_id):
         db.session.add(transfer3)
 
     # 4. Create recurring expenses
-    netflix_recurring = RecurringExpense.query.filter_by(
-        description="Netflix Subscription", user_id=user_id
-    ).first()
+    netflix_recurring: RecurringExpense | None = (
+        db.session.query(RecurringExpense)
+        .filter_by(description="Netflix Subscription", user_id=user_id)
+        .first()
+    )
     if not netflix_recurring:
         logger.info("Creating demo Netflix recurring expense")
         recurring1 = RecurringExpense(
@@ -508,9 +558,11 @@ def create_demo_data(user_id):
         )
         db.session.add(recurring1)
 
-    rent_recurring = RecurringExpense.query.filter_by(
-        description="Monthly Rent Payment", user_id=user_id
-    ).first()
+    rent_recurring: RecurringExpense | None = (
+        db.session.query(RecurringExpense)
+        .filter_by(description="Monthly Rent Payment", user_id=user_id)
+        .first()
+    )
     if not rent_recurring:
         logger.info("Creating demo rent recurring expense")
         recurring2 = RecurringExpense(
@@ -529,14 +581,16 @@ def create_demo_data(user_id):
         db.session.add(recurring2)
 
     # 5. Create budgets
-    food_budget = Budget.query.filter_by(
-        name="Monthly Food", user_id=user_id
-    ).first()
-    if not food_budget:
+    food_budget: Budget | None = (
+        db.session.query(Budget)
+        .filter_by(name="Monthly Food", user_id=user_id)
+        .first()
+    )
+    if food_category and not food_budget:
         logger.info("Creating demo food budget")
         budget1 = Budget(
             user_id=user_id,
-            category_id=food_category.id if food_category else None,
+            category_id=food_category.id,
             name="Monthly Food",
             amount=600.00,
             period="monthly",
@@ -547,16 +601,16 @@ def create_demo_data(user_id):
         )
         db.session.add(budget1)
 
-    transport_budget = Budget.query.filter_by(
-        name="Transportation Budget", user_id=user_id
-    ).first()
-    if not transport_budget:
+    transport_budget: Budget | None = (
+        db.session.query(Budget)
+        .filter_by(name="Transportation Budget", user_id=user_id)
+        .first()
+    )
+    if transportation_category and not transport_budget:
         logger.info("Creating demo transportation budget")
         budget2 = Budget(
             user_id=user_id,
-            category_id=transportation_category.id
-            if transportation_category
-            else None,
+            category_id=transportation_category.id,
             name="Transportation Budget",
             amount=300.00,
             period="monthly",
@@ -567,16 +621,16 @@ def create_demo_data(user_id):
         )
         db.session.add(budget2)
 
-    entertainment_budget = Budget.query.filter_by(
-        name="Entertainment Budget", user_id=user_id
-    ).first()
-    if not entertainment_budget:
+    entertainment_budget = (
+        db.session.query(Budget)
+        .filter_by(name="Entertainment Budget", user_id=user_id)
+        .first()
+    )
+    if entertainment_category and not entertainment_budget:
         logger.info("Creating demo entertainment budget")
         budget3 = Budget(
             user_id=user_id,
-            category_id=entertainment_category.id
-            if entertainment_category
-            else None,
+            category_id=entertainment_category.id,
             name="Entertainment Budget",
             amount=200.00,
             period="monthly",
@@ -590,9 +644,10 @@ def create_demo_data(user_id):
     # Commit all changes
     try:
         db.session.commit()
-        logger.info("Demo data created/updated successfully")
-        return True
     except Exception:
         db.session.rollback()
         logger.exception("Error creating demo data")
         return False
+    else:
+        logger.info("Demo data created/updated successfully")
+        return True
