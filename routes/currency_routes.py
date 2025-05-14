@@ -15,8 +15,8 @@ from flask_login import current_user
 
 from extensions import db
 from models import Currency
+from services.update_currencies import update_currency_rates
 from services.wrappers import login_required, login_required_dev
-from update_currencies import update_currency_rates
 
 currency_bp = Blueprint("currency", __name__)
 
