@@ -10,11 +10,118 @@ from models import (
     Budget,
     Category,
     CategoryMapping,
+    CategorySplit,
     Currency,
     Expense,
+    IgnoredRecurringPattern,
+    RecurringExpense,
     Settlement,
+    Tag,
     User,
 )
+from simplefin_client import SimpleFin
+
+
+def reset_demo_data(user_id):
+    """Reset all demo data for a user with comprehensive relationship handling."""
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.info("Resetting demo data for user %s", {user_id})
+
+    try:
+        # Start a transaction
+        db.session.begin()
+
+        # 1. Get all expenses for this user
+        expenses = Expense.query.filter_by(user_id=user_id).all()
+        expense_ids = [expense.id for expense in expenses]
+
+        # 2. Delete category splits referencing these expenses
+        if expense_ids:
+            split_count = CategorySplit.query.filter(
+                CategorySplit.expense_id.in_(expense_ids)
+            ).delete(synchronize_session=False)
+            logger.info("Deleted %s category splits", {split_count})
+
+        # 3. Delete tags associations for these expenses
+        if expense_ids:
+            from sqlalchemy import text
+
+            db.session.execute(
+                text("""
+                DELETE FROM expense_tags 
+                WHERE expense_id IN :expense_ids
+            """),
+                {
+                    "expense_ids": tuple(expense_ids)
+                    if len(expense_ids) > 1
+                    else f"({expense_ids[0]})"
+                },
+            )
+            logger.info("Deleted expense tag associations")
+
+        # 4. Now delete expenses
+        expense_count = Expense.query.filter_by(user_id=user_id).delete()
+        logger.info("Deleted %s expenses", {expense_count})
+
+        # 5. Delete recurring expenses
+        recurring_count = RecurringExpense.query.filter_by(
+            user_id=user_id
+        ).delete()
+        logger.info("Deleted %s recurring expenses", {recurring_count})
+
+        # 6. Delete budgets
+        budget_count = Budget.query.filter_by(user_id=user_id).delete()
+        logger.info("Deleted %s budgets", {budget_count})
+
+        # 7. Delete category mappings
+        mapping_count = CategoryMapping.query.filter_by(
+            user_id=user_id
+        ).delete()
+        logger.info("Deleted %s category mappings", {mapping_count})
+
+        # 8. Delete ignored patterns
+        pattern_count = IgnoredRecurringPattern.query.filter_by(
+            user_id=user_id
+        ).delete()
+        logger.info("Deleted %s ignored patterns", {pattern_count})
+
+        # 9. Delete SimpleFin settings
+        simplefin_count = SimpleFin.query.filter_by(user_id=user_id).delete()
+        logger.info("Deleted %s SimpleFin settings", {simplefin_count})
+
+        # 10. Delete settlements
+        from sqlalchemy import or_
+
+        settlement_count = Settlement.query.filter(
+            or_(
+                Settlement.payer_id == user_id,
+                Settlement.receiver_id == user_id,
+            )
+        ).delete(synchronize_session=False)
+        logger.info("Deleted %s settlements", {settlement_count})
+
+        # 11. Delete all accounts
+        account_count = Account.query.filter_by(user_id=user_id).delete()
+        logger.info("Deleted %s accounts", {account_count})
+
+        # 12. Delete all tags
+        tag_count = Tag.query.filter_by(user_id=user_id).delete()
+        logger.info("Deleted %s tags", {tag_count})
+
+        # 13. Delete all categories
+        category_count = Category.query.filter_by(user_id=user_id).delete()
+        logger.info("Deleted %s categories", {category_count})
+
+        # Commit the transaction
+        db.session.commit()
+        logger.info("Demo data reset successful")
+        return True
+    except Exception:
+        db.session.rollback()
+        logger.exception("Error resetting demo data")
+        return False
 
 
 def get_category_spending(expenses, expense_splits):

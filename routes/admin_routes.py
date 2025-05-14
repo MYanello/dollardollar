@@ -247,7 +247,7 @@ def admin_toggle_admin_status(user_id):
 
 
 def send_welcome_email(user):
-    """Send a welcome email to a newly registered user"""
+    """Send a welcome email to a newly registered user."""
     try:
         subject = "Welcome to Dollar Dollar Bill Y'all!"
 

@@ -14,19 +14,19 @@ from flask import (
 )
 from flask_login import current_user, login_user, logout_user
 
-from app import (
-    DEV_USER_EMAIL,
-    DEV_USER_PASSWORD,
-    create_default_budgets,
-    create_default_categories,
-    reset_demo_data,
-    send_welcome_email,
-    sync_simplefin_for_user,
-)
 from extensions import db
 from models import User
 from recurring_detection import detect_recurring_transactions
-from services.wrappers import login_required_dev, restrict_demo_access
+from routes.admin_routes import send_welcome_email
+from routes.simplefin_routes import sync_simplefin_for_user
+from services.defaults import create_default_budgets, create_default_categories
+from services.helpers import reset_demo_data
+from services.wrappers import (
+    DEV_USER_EMAIL,
+    DEV_USER_PASSWORD,
+    login_required_dev,
+    restrict_demo_access,
+)
 from simplefin_client import SimpleFin
 
 auth_bp = Blueprint("auth", __name__)
