@@ -42,8 +42,8 @@ def localize_datetime(dt, user):
 
 
 # Context processor for timezone-aware datetime formatting
-@current_app.context_processor
 def timezone_processor():
+    @current_app.context_processor
     def format_datetime(dt, format="medium"):
         """Format datetime in user's local timezone."""
         if not dt:
