@@ -37,6 +37,7 @@ def login_required_dev(f):
 def restrict_demo_access(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        demo_timeout = current_app.extensions.get("demo_timeout")
         if current_user.is_authenticated and demo_timeout.is_demo_user(
             current_user.id
         ):

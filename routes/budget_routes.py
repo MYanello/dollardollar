@@ -16,7 +16,8 @@ from flask_login import current_user
 from extensions import db
 from models import Budget, Category, CategorySplit, Expense
 from services.helpers import calculate_category_spending, get_base_currency
-from services.wrappers import demo_time_limited, login_required_dev
+from services.wrappers import login_required_dev
+from session_timeout import demo_time_limited
 
 budget_bp = Blueprint("budget", __name__)
 

@@ -29,7 +29,8 @@ from services.defaults import (
     create_default_category_mappings,
 )
 from services.helpers import auto_categorize_transaction
-from services.wrappers import demo_time_limited, login_required_dev
+from services.wrappers import login_required_dev
+from session_timeout import demo_time_limited
 
 category_bp = Blueprint("category", __name__)
 

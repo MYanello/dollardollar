@@ -16,21 +16,20 @@ import ssl
 from oidc_auth import setup_oidc_config, register_oidc_routes
 from oidc_user import extend_user_model
 from simplefin_client import SimpleFin
-import base64
 import pytz
 from config import get_config
 from extensions import db, login_manager, mail, migrate, scheduler
 import extensions
-import json
-from datetime import datetime, timedelta
+from datetime import datetime
 
+from simplefin_client import SimpleFin
 
 from sqlalchemy import func, or_, and_, inspect, text
 
 from routes import register_blueprints
 from session_timeout import DemoTimeout
 
-from models import Account, Budget, Category, CategoryMapping, CategorySplit, Currency, Expense, Group, RecurringExpense, Settlement, User
+from models import Account, Budget, Category, CategoryMapping, Currency, Expense, RecurringExpense, Settlement, User
 
 # Development user credentials from environment
 DEV_USER_EMAIL = os.getenv('DEV_USER_EMAIL', 'dev@example.com')
@@ -726,123 +725,6 @@ def calculate_iou_data(expenses, users):
     
     return iou_data
 
-def calculate_balances(user_id):
-    """Calculate balances between the current user and all other users"""
-    balances = {}
-    
-    # Step 1: Calculate balances from expenses
-    expenses = Expense.query.filter(
-        or_(
-            Expense.paid_by == user_id,
-            Expense.split_with.like(f'%{user_id}%')
-        )
-    ).all()
-    
-    for expense in expenses:
-        splits = expense.calculate_splits()
-        
-        # If current user paid for the expense
-        if expense.paid_by == user_id:
-            # Add what others owe to current user
-            for split in splits['splits']:
-                other_user_id = split['email']
-                if other_user_id != user_id:
-                    if other_user_id not in balances:
-                        other_user = User.query.filter_by(id=other_user_id).first()
-                        balances[other_user_id] = {
-                            'user_id': other_user_id,
-                            'name': other_user.name if other_user else 'Unknown',
-                            'email': other_user_id,
-                            'amount': 0
-                        }
-                    balances[other_user_id]['amount'] += split['amount']
-        else:
-            # If someone else paid and current user owes them
-            payer_id = expense.paid_by
-            
-            # Find current user's portion
-            current_user_portion = 0
-            
-            # Check if current user is in the splits
-            for split in splits['splits']:
-                if split['email'] == user_id:
-                    current_user_portion = split['amount']
-                    break
-            
-            if current_user_portion > 0:
-                if payer_id not in balances:
-                    payer = User.query.filter_by(id=payer_id).first()
-                    balances[payer_id] = {
-                        'user_id': payer_id,
-                        'name': payer.name if payer else 'Unknown',
-                        'email': payer_id,
-                        'amount': 0
-                    }
-                balances[payer_id]['amount'] -= current_user_portion
-    
-    # Step 2: Adjust balances based on settlements
-    settlements = Settlement.query.filter(
-        or_(
-            Settlement.payer_id == user_id,
-            Settlement.receiver_id == user_id
-        )
-    ).all()
-    
-    for settlement in settlements:
-        if settlement.payer_id == user_id:
-            # Current user paid money to someone else
-            other_user_id = settlement.receiver_id
-            if other_user_id not in balances:
-                other_user = User.query.filter_by(id=other_user_id).first()
-                balances[other_user_id] = {
-                    'user_id': other_user_id,
-                    'name': other_user.name if other_user else 'Unknown',
-                    'email': other_user_id,
-                    'amount': 0
-                }
-            # FIX: When current user pays someone, it INCREASES how much they owe the current user
-            # Change from -= to += 
-            balances[other_user_id]['amount'] += settlement.amount
-            
-        elif settlement.receiver_id == user_id:
-            # Current user received money from someone else
-            other_user_id = settlement.payer_id
-            if other_user_id not in balances:
-                other_user = User.query.filter_by(id=other_user_id).first()
-                balances[other_user_id] = {
-                    'user_id': other_user_id,
-                    'name': other_user.name if other_user else 'Unknown',
-                    'email': other_user_id,
-                    'amount': 0
-                }
-            # FIX: When current user receives money, it DECREASES how much they're owed
-            # Change from += to -=
-            balances[other_user_id]['amount'] -= settlement.amount
-    
-    # Return only non-zero balances
-    return [balance for balance in balances.values() if abs(balance['amount']) > 0.01]
-
-def get_base_currency():
-    """Get the current user's default currency or fall back to base currency if not set"""
-    if current_user.is_authenticated and current_user.default_currency_code and current_user.default_currency:
-        # User has set a default currency, use that
-        return {
-            'code': current_user.default_currency.code,
-            'symbol': current_user.default_currency.symbol,
-            'name': current_user.default_currency.name
-        }
-    else:
-        # Fall back to system base currency if user has no preference
-        base_currency = Currency.query.filter_by(is_base=True).first()
-        if not base_currency:
-            # Default to USD if no base currency is set
-            return {'code': 'USD', 'symbol': '$', 'name': 'US Dollar'}
-        return {
-            'code': base_currency.code,
-            'symbol': base_currency.symbol,
-            'name': base_currency.name
-        }
-    
 
 @app.before_first_request
 def check_db_structure():
@@ -1011,77 +893,7 @@ def utility_processor():
         'get_budget_status_for_category': get_budget_status_for_category,
         'get_account_by_id': get_account_by_id
     }
-    
-def calculate_category_spending(category_id, start_date, end_date, include_subcategories=True):
-    """Calculate total spending for a category within a date range"""
-    
-    # Get the category
-    category = Category.query.get(category_id)
-    if not category:
-        return 0
-    
-    total_spent = 0
-    
-    # 1. Get direct expenses (transactions directly assigned to this category without splits)
-    direct_expenses = Expense.query.filter(
-        Expense.user_id == current_user.id,
-        Expense.category_id == category_id,
-        Expense.date >= start_date,
-        Expense.date <= end_date,
-        Expense.has_category_splits == False  # Important: only include non-split expenses
-    ).all()
-    
-    # Add up direct expenses
-    for expense in direct_expenses:
-        # Use amount_base if available (for currency conversion), otherwise use amount
-        amount = getattr(expense, 'amount_base', expense.amount)
-        total_spent += amount
-    
-    # 2. Get category splits assigned to this category
-    category_splits = CategorySplit.query.join(Expense).filter(
-        Expense.user_id == current_user.id,
-        CategorySplit.category_id == category_id,
-        Expense.date >= start_date,
-        Expense.date <= end_date
-    ).all()
-    
-    # Add up split amounts
-    for split in category_splits:
-        # Use split amount directly - these should already be in the correct currency
-        total_spent += split.amount
-    
-    # 3. Include subcategories if requested and if this is a parent category
-    if include_subcategories and not category.parent_id:
-        subcategory_ids = [subcat.id for subcat in category.subcategories]
-        
-        for subcategory_id in subcategory_ids:
-            # For each subcategory, repeat the process
-            # Process direct expenses
-            subcat_direct = Expense.query.filter(
-                Expense.user_id == current_user.id,
-                Expense.category_id == subcategory_id,
-                Expense.date >= start_date,
-                Expense.date <= end_date,
-                Expense.has_category_splits == False
-            ).all()
-            
-            for expense in subcat_direct:
-                amount = getattr(expense, 'amount_base', expense.amount)
-                total_spent += amount
-            
-            # Process split expenses
-            subcat_splits = CategorySplit.query.join(Expense).filter(
-                Expense.user_id == current_user.id,
-                CategorySplit.category_id == subcategory_id,
-                Expense.date >= start_date,
-                Expense.date <= end_date
-            ).all()
-            
-            for split in subcat_splits:
-                total_spent += split.amount
-    
-    return total_spent
-
+ 
 # Add to utility_processor to make budget info available in templates
 @app.context_processor
 def utility_processor():

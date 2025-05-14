@@ -124,6 +124,90 @@ def reset_demo_data(user_id):
         return False
 
 
+def calculate_category_spending(
+    category_id, start_date, end_date, include_subcategories=True
+):
+    """Calculate total spending for a category within a date range."""
+    # Get the category
+    category = Category.query.get(category_id)
+    if not category:
+        return 0
+
+    total_spent = 0
+
+    # 1. Get direct expenses (transactions directly assigned to this category
+    # without splits)
+    direct_expenses = Expense.query.filter(
+        Expense.user_id == current_user.id,
+        Expense.category_id == category_id,
+        Expense.date >= start_date,
+        Expense.date <= end_date,
+        Expense.has_category_splits
+        == False,  # Important: only include non-split expenses
+    ).all()
+
+    # Add up direct expenses
+    for expense in direct_expenses:
+        # Use amount_base if available (for currency conversion),
+        # otherwise use amount
+        amount = getattr(expense, "amount_base", expense.amount)
+        total_spent += amount
+
+    # 2. Get category splits assigned to this category
+    category_splits = (
+        CategorySplit.query.join(Expense)
+        .filter(
+            Expense.user_id == current_user.id,
+            CategorySplit.category_id == category_id,
+            Expense.date >= start_date,
+            Expense.date <= end_date,
+        )
+        .all()
+    )
+
+    # Add up split amounts
+    for split in category_splits:
+        # Use split amount directly - these should already be in the
+        # correct currency
+        total_spent += split.amount
+
+    # 3. Include subcategories if requested and if this is a parent category
+    if include_subcategories and not category.parent_id:
+        subcategory_ids = [subcat.id for subcat in category.subcategories]
+
+        for subcategory_id in subcategory_ids:
+            # For each subcategory, repeat the process
+            # Process direct expenses
+            subcat_direct = Expense.query.filter(
+                Expense.user_id == current_user.id,
+                Expense.category_id == subcategory_id,
+                Expense.date >= start_date,
+                Expense.date <= end_date,
+                Expense.has_category_splits == False,
+            ).all()
+
+            for expense in subcat_direct:
+                amount = getattr(expense, "amount_base", expense.amount)
+                total_spent += amount
+
+            # Process split expenses
+            subcat_splits = (
+                CategorySplit.query.join(Expense)
+                .filter(
+                    Expense.user_id == current_user.id,
+                    CategorySplit.category_id == subcategory_id,
+                    Expense.date >= start_date,
+                    Expense.date <= end_date,
+                )
+                .all()
+            )
+
+            for split in subcat_splits:
+                total_spent += split.amount
+
+    return total_spent
+
+
 def get_category_spending(expenses, expense_splits):
     current_month = datetime.now().month
     current_year = datetime.now().year
