@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+ /* The switch - the box around the slider */
+ .switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 34px;
+  }
+  
+  /* Hide default HTML checkbox */
+  .switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  
+  /* The slider */
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    -webkit-transition: .4s;
+    transition: .4s;
+  }
+  
+  .slider:before {
+    position: absolute;
+    content: "";
+    height: 26px;
+    width: 26px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    -webkit-transition: .4s;
+    transition: .4s;
+  }
+  
+  input:checked + .slider {
+    background-color: #2196F3;
+  }
+  
+  input:focus + .slider {
+    box-shadow: 0 0 1px #2196F3;
+  }
+  
+  input:checked + .slider:before {
+    -webkit-transform: translateX(26px);
+    -ms-transform: translateX(26px);
+    transform: translateX(26px);
+  }
+  
+  /* Rounded sliders */
+  .slider.round {
+    border-radius: 34px;
+  }
+  
+  .slider.round:before {
+    border-radius: 50%;
+  } 
+</style>
+<div class="container">
+    <h1 class="mb-4">Select your accounts for GoCardless</h1>
+
+    <div class="tab-content" id="importTabsContent">
+        <div class="tab-pane fade show active" id="choose-country" role="tabpanel">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Accounts</h5>
+                </div>
+                <div class="card-body">
+                    <p>The following accounts were found with the newest requisition:</p>
+                    <form id="accounts" method="POST" action="{{ url_for('gocardless.customize_accounts') }}">
+                        <table class="table table-striped text-white">
+                            <thead>
+                                <tr>
+                                    <th>Account ID</th>
+                                    <th>Owner name</th>
+                                    <th>IBAN</th>
+                                    <th>Import</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for account,details in accounts.items() %}
+                                <tr id="{{ account }}"></tr>
+                                <td>{{ account }}</td>
+                                <td>{{ details["owner_name"] }}</td>
+                                <td>{{ details["iban"] }}</td>
+                                <td>
+                                    <label class="switch">
+                                        <input id="checkbox-{{ account }}" type="checkbox" value="{{ account }}" name="account">
+                                        <span class="slider round"></span>
+                                    </label>
+                                </td>
+                                    <!-- <label for="checkbox-{{ account }}" class="form-label">{{ account }} ({{
+                                        details["owner_name"]
+                                        }} |
+                                        {{ details["iban"] }})</label> -->
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </form>
+                    <p>Select the ones you want to import into Dollar Dollar Bill Y'all, and click the submit
+                        button.
+                    </p>
+                    {% if requisitions|length > 1 %}
+                    <p>
+                        <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#requisitions"
+                            aria-expanded="false" aria-controls="requisitions">
+                            Your additional requisitions<i class="fas fa-arrow-down ms-1"></i>
+                        </button>
+                    </p>
+                    <div class="collapse" id="requisitions">
+                        <div class="table-responsive">
+                            <table class="table table-striped text-white">
+                                <thead>
+                                    <tr>
+                                        <th>Requisition ID</th>
+                                        <th>Bank ID</th>
+                                        <th>Historical days</th>
+                                        <th>Access valid</th>
+                                        <th>Balances</th>
+                                        <th>Details</th>
+                                        <th>Transactions</th>
+                                        <th>Creation date</th>
+                                        <th>Expiry date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for requisition in requisitions %}
+                                    <tr id="requisition-row-{{ requisition.id }}" data-toggle="collapse"
+                                        data-target="#requisitions" aria-expanded="false" aria-controls="requisitions">
+                                        <td class="text-white">{{ requisition.id }}</td>
+                                        <td class="text-white">{{ requisition.bank_id }}</td>
+                                        <td class="text-white">
+                                            {{ requisition.agreement.max_historical_days }}
+                                            {% if requisition.agreement.max_historical_days > 1 %}
+                                            days
+                                            {% else %}
+                                            day
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-white">
+                                            {{ requisition.agreement.access_valid_for_days }}
+                                            {% if requisition.agreement.access_valid_for_days > 1 %}
+                                            days
+                                            {% else %}
+                                            day
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-white">{{ requisition.agreement.scope_balances }}</td>
+                                        <td class="text-white">{{ requisition.agreement.scope_details }}</td>
+                                        <td class="text-white">{{ requisition.agreement.scope_transactions }}</td>
+                                        <td class="text-white">{{ requisition.created_at.date() }}</td>
+                                        <td class="text-white">{{ requisition.agreement.expiry_date.date() }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="d-flex justify-content-between">
+        <a id="cancel-btn" href="{{ url_for('account.advanced') }}" class="btn btn-danger">
+            <i class="fas fa-arrow-left me-1"></i>Cancel
+        </a>
+        <button type="submit" id="submit-btn" class="btn btn-primary" form="accounts">
+            <i class="fas fa-checkmark me-1"></i>Submit
+        </button>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
+    integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"
+    crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.1.3/dist/js/bootstrap.min.js"
+    integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy"
+    crossorigin="anonymous"></script>
+{% endblock %}
