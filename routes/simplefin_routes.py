@@ -16,7 +16,7 @@ from flask import (
 from flask_login import current_user
 
 import simplefin_client
-from extensions import db
+from database import db
 from models import Account, Expense, User
 from services.wrappers import login_required_dev
 from simplefin_client import SimpleFin

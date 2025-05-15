@@ -23,7 +23,7 @@ from extensions import login_manager, mail, migrate, scheduler
 import re
 import json
 from datetime import datetime, timedelta
-
+from database import db
 
 from sqlalchemy import func, or_, and_, inspect, text
 

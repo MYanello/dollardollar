@@ -1,7 +1,7 @@
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user
 
-from extensions import db
+from database import db
 from models import Tag
 from services.wrappers import login_required_dev
 

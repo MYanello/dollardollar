@@ -11,7 +11,8 @@ from flask import (
 from flask_login import current_user
 from flask_mail import Message
 
-from extensions import db, mail
+from database import db
+from extensions import mail
 from models import Category, Currency, Expense, Group, User
 from services.defaults import create_default_categories
 from services.helpers import get_base_currency

@@ -10,7 +10,7 @@ class Config:
         "SECRET_KEY", "fallback_secret_key_change_in_production"
     )
     SQLALCHEMY_DATABASE_URI = os.getenv(
-        "SQLALCHEMY_DATABASE_URI", "sqlite:///instance/expenses.db"
+        "SQLALCHEMY_DATABASE_URI", "sqlite:///app.db"
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 

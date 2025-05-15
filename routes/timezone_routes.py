@@ -1,8 +1,8 @@
 import pytz
-from flask import Blueprint, current_app, flash, redirect, request, url_for
+from flask import Blueprint, flash, redirect, request, url_for
 from flask_login import current_user
 
-from extensions import db
+from database import db
 from services.wrappers import login_required_dev
 
 timezone_bp = Blueprint("timezone", __name__)

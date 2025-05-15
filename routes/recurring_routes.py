@@ -15,7 +15,7 @@ from flask import (
 from flask_login import current_user
 from sqlalchemy import or_
 
-from extensions import db
+from database import db
 from models import (
     Account,
     Category,

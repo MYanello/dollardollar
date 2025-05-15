@@ -4,7 +4,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user
 from sqlalchemy import or_
 
-from extensions import db
+from database import db
 from models import Settlement, User
 from services.helpers import calculate_balances, get_base_currency
 from services.wrappers import login_required_dev
