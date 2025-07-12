@@ -238,7 +238,7 @@ class Expense(Base):
             except Exception as e:
                 # Log the error or handle it as appropriate
                 print(
-                    f"Error parsing split_details for expense {self.id}: {str(e)}"
+                    f"Error parsing split_details for expense {self.id}: {e!s}"
                 )
                 split_details = {}
 

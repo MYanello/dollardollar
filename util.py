@@ -10,8 +10,7 @@ from models import Account, Category, CategoryMapping
 
 
 def detect_internal_transfer(description, amount, account_id=None):
-    """
-    Detect if a transaction appears to be an internal transfer between accounts
+    """Detect if a transaction appears to be an internal transfer between accounts
     Returns a tuple of (is_transfer, source_account_id, destination_account_id)
     """
     # Default return values
@@ -76,8 +75,7 @@ def detect_internal_transfer(description, amount, account_id=None):
 
 
 def auto_categorize_transaction(description: str, user_id) -> None | int:  # noqa: C901
-    """
-    Automatically categorize a transaction based on its description
+    """Automatically categorize a transaction based on its description
     Returns the best matching category ID or None if no match found
     """
     if not description:

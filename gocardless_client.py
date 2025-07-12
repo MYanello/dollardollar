@@ -376,7 +376,7 @@ class GoCardlessClient:
                     else:
                         return None, False  # Skip zero-amount transactions
             except Exception as e:
-                self.app.logger.error(f"Error in transfer detection: {str(e)}")
+                self.app.logger.error(f"Error in transfer detection: {e!s}")
                 is_transfer = False
                 transaction_type = trans_data.get("transaction_type", "expense")
         else:
@@ -414,7 +414,7 @@ class GoCardlessClient:
                     )
                 except Exception as e:
                     self.app.logger.error(
-                        f"Error in auto-categorization: {str(e)}"
+                        f"Error in auto-categorization: {e!s}"
                     )
 
             # If auto-categorization didn't find a match but SimpleFin provided a category name,
@@ -431,7 +431,7 @@ class GoCardlessClient:
                         db_account.user_id,
                     )
                 except Exception as e:
-                    self.app.logger.error(f"Error in category lookup: {str(e)}")
+                    self.app.logger.error(f"Error in category lookup: {e!s}")
 
             # Set the category if we found one
             if category_id:

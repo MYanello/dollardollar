@@ -1,7 +1,8 @@
 r"""29a41de6a866d56c36aba5159f45257c"""
 # save as update_db.py
-from sqlalchemy import create_engine, text, inspect
 import os
+
+from sqlalchemy import create_engine, inspect, text
 
 # Get database URI from environment or use default
 db_uri = os.environ.get('SQLALCHEMY_DATABASE_URI', 'postgresql://postgres:postgres@db:5432/dollardollar')
@@ -13,7 +14,7 @@ engine = create_engine(db_uri)
 with engine.connect() as connection:
     inspector = inspect(engine)
     columns = [col['name'] for col in inspector.get_columns('users')]
-    
+
     if 'user_color' not in columns:
         print("Adding missing user_color column...")
         try:
