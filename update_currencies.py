@@ -1,9 +1,3 @@
-r"""29a41de6a866d56c36aba5159f45257c"""
-
-#!/usr/bin/env python
-"""
-This script updates currency exchange rates in the application database.
-"""
 from datetime import datetime, timezone
 
 import requests
@@ -12,6 +6,9 @@ from flask import current_app
 from database import db
 from models import Currency
 
+"""
+This script updates currency exchange rates in the application database.
+"""
 
 def update_currency_rates() -> int:
     """Update currency exchange rates using a public API.

@@ -2,27 +2,26 @@
 from datetime import datetime, timedelta
 from collections import defaultdict
 import calendar
-from sqlalchemy import and_, or_
 
 def detect_recurring_transactions(user_id, lookback_days=60, min_occurrences=2):
     """
     Detect potential recurring transactions for a user based on transaction history.
-    
+
     Parameters:
     - user_id: The user ID to detect recurring transactions for
     - lookback_days: Number of days to look back for transaction history (default: 60)
     - min_occurrences: Minimum number of occurrences to consider a transaction recurring (default: 2)
-    
+
     Returns:
     - A list of potential recurring transactions with metadata
     """
     # Calculate start date for analysis period
-    from app import db, Expense
-    from sqlalchemy import and_, or_
-    
+    from app import Expense
+    from sqlalchemy import and_
+
     end_date = datetime.now()
     start_date = end_date - timedelta(days=lookback_days)
-    
+
     # Query user's transactions in the period
     transactions = Expense.query.filter(
         and_(
@@ -33,60 +32,60 @@ def detect_recurring_transactions(user_id, lookback_days=60, min_occurrences=2):
             Expense.recurring_id.is_(None)
         )
     ).order_by(Expense.date).all()
-    
+
     # Group transactions by name + amount (potential recurrence key)
     transaction_groups = defaultdict(list)
-    
+
     for transaction in transactions:
         # Create a composite key of description and amount (rounded to handle minor variations)
         key = f"{transaction.description.strip().lower()}_{round(transaction.amount, 2)}"
         transaction_groups[key].append(transaction)
-    
+
     # Find recurring patterns
     recurring_candidates = []
-    
+
     for key, group in transaction_groups.items():
         # Only consider groups with multiple occurrences
         if len(group) < min_occurrences:
             continue
-        
+
         # Sort transactions by date
         sorted_transactions = sorted(group, key=lambda x: x.date)
-        
+
         # Analyze time intervals between transactions
         intervals = []
         for i in range(1, len(sorted_transactions)):
             delta = (sorted_transactions[i].date - sorted_transactions[i-1].date).days
             intervals.append(delta)
-        
+
         # Skip if no intervals (only one transaction)
         if not intervals:
             continue
-            
+
         # Calculate average interval
         avg_interval = sum(intervals) / len(intervals)
-        
+
         # Determine frequency based on average interval
         frequency = determine_frequency(avg_interval)
-        
+
         # Skip if frequency couldn't be determined
         if not frequency:
             continue
-            
+
         # Check consistency of intervals for higher confidence
         interval_consistency = calculate_interval_consistency(intervals)
-        
+
         # Last transaction date
         last_transaction = sorted_transactions[-1]
-        
+
         # Calculate next expected date
         next_date = calculate_next_occurrence(last_transaction.date, frequency)
-        
+
         # Only include if consistency is reasonable
         if interval_consistency >= 0.7:  # 70% consistency threshold
             # Get sample transaction for details
             sample = sorted_transactions[0]
-            
+
             recurring_candidates.append({
                 'description': sample.description,
                 'amount': sample.amount,
@@ -103,10 +102,10 @@ def detect_recurring_transactions(user_id, lookback_days=60, min_occurrences=2):
                 # Include transaction IDs for reference
                 'transaction_ids': [t.id for t in sorted_transactions]
             })
-    
+
     # Sort by confidence (highest first)
     recurring_candidates.sort(key=lambda x: x['confidence'], reverse=True)
-    
+
     return recurring_candidates
 
 
@@ -135,22 +134,22 @@ def calculate_interval_consistency(intervals):
     """
     if not intervals:
         return 0
-    
+
     # If only one interval, it's consistent by definition
     if len(intervals) == 1:
         return 0.95  # High but not perfect confidence
-    
+
     # Calculate mean and standard deviation
     mean_interval = sum(intervals) / len(intervals)
     variance = sum((x - mean_interval) ** 2 for x in intervals) / len(intervals)
     std_deviation = variance ** 0.5
-    
+
     # Calculate coefficient of variation (lower is more consistent)
     if mean_interval == 0:
         return 0
-    
+
     cv = std_deviation / mean_interval
-    
+
     # Convert to consistency score (1 - normalized CV)
     # If CV is greater than 0.5, consistency drops quickly
     if cv > 0.5:
@@ -171,27 +170,27 @@ def calculate_next_occurrence(last_date, frequency):
         # Handle month rollover properly
         month = last_date.month + 1
         year = last_date.year
-        
+
         if month > 12:
             month = 1
             year += 1
-            
+
         # Handle different days in months
         day = min(last_date.day, calendar.monthrange(year, month)[1])
-        
+
         return last_date.replace(year=year, month=month, day=day)
     elif frequency == 'quarterly':
         # Add three months
         month = last_date.month + 3
         year = last_date.year
-        
+
         if month > 12:
             month -= 12
             year += 1
-            
+
         # Handle different days in months
         day = min(last_date.day, calendar.monthrange(year, month)[1])
-        
+
         return last_date.replace(year=year, month=month, day=day)
     elif frequency == 'yearly':
         # Add a year
@@ -204,20 +203,20 @@ def calculate_next_occurrence(last_date, frequency):
 def create_recurring_expense_from_detection(user_id, candidate, start_date=None):
     """
     Create a RecurringExpense from a detected candidate
-    
+
     Parameters:
     - user_id: User ID to create the recurring expense for
     - candidate: The detected recurring candidate dict
     - start_date: Optional start date (defaults to today)
-    
+
     Returns:
     - The created RecurringExpense object
     """
     from app import RecurringExpense
-    
+
     if start_date is None:
         start_date = datetime.now()
-    
+
     # Create the recurring expense
     recurring = RecurringExpense(
         description=candidate['description'],
@@ -232,7 +231,7 @@ def create_recurring_expense_from_detection(user_id, candidate, start_date=None)
         currency_code=candidate.get('currency_code'),
         category_id=candidate.get('category_id'),
         account_id=candidate.get('account_id'),
-        transaction_type=candidate['transaction_type'] 
+        transaction_type=candidate['transaction_type']
     )
-    
+
     return recurring

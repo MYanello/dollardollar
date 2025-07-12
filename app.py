@@ -14,24 +14,20 @@ import ssl
 from oidc_auth import setup_oidc_config, register_oidc_routes
 from oidc_user import extend_user_model
 from simplefin_client import SimpleFin
-import base64
 import pytz
 from config import get_config
 from extensions import login_manager, mail, migrate, scheduler, init_db
-import re
-import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from database import db
 from services.helpers import init_default_currencies
-from sqlalchemy import func, or_, and_, inspect, text
+from sqlalchemy import or_, and_
 
 from routes import register_blueprints
 from session_timeout import DemoTimeout
 
-from models import Account, Budget, Category, CategoryMapping, CategorySplit, Currency, Expense, Group, IgnoredRecurringPattern, RecurringExpense, Settlement, Tag, User
-from tables import group_users
+from models import Account, Budget, Category, CategoryMapping, Currency, Expense, RecurringExpense, Settlement, User
 
-from util import auto_categorize_transaction, check_db_structure, detect_internal_transfer, get_category_id
+from util import check_db_structure, detect_internal_transfer
 
 # Development user credentials from environment
 DEV_USER_EMAIL = os.getenv('DEV_USER_EMAIL', 'dev@example.com')

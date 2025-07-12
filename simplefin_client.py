@@ -1,12 +1,6 @@
-# simplefin_client.py
-import os
 import requests
-import json
 import base64
-import time
 from datetime import datetime, timedelta
-from flask import session, url_for, redirect, flash
-from urllib.parse import urlencode
 
 class SimpleFin:
     """
@@ -43,7 +37,7 @@ class SimpleFin:
             
             if response.status_code == 200:
                 access_url = response.text.strip()
-                self.app.logger.info(f"Access URL received")
+                self.app.logger.info("Access URL received")
                 return access_url
             else:
                 self.app.logger.error(f"Error claiming access URL: {response.status_code} - {response.text}")

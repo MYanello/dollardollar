@@ -1,10 +1,8 @@
-# demo_reset.py
 import os
 import time
 import logging
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from datetime import datetime, timedelta
 import schedule
 
 # Setup logging
@@ -29,7 +27,7 @@ def reset_demo_data():
         session = Session()
         
         # Import models for database operations
-        from app import User, Group, Expense, Budget, Category, Tag
+        from app import User, Group, Expense, Budget, Tag
         
         # Clean demo-specific data
         logger.info("Cleaning demo user data")

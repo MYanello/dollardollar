@@ -1,4 +1,3 @@
-# session_timeout.py
 import threading
 from datetime import datetime, timedelta, timezone
 from functools import wraps
