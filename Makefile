@@ -8,13 +8,13 @@ LATEST_TAG := $(REGISTRY)/$(IMAGE_NAME):latest
 # Build Docker image
 .PHONY: build
 build:
-	docker build -t $(IMAGE_TAG) -t $(LATEST_TAG) . --provenance=false
+	nerdctl build -t $(IMAGE_TAG) -t $(LATEST_TAG) . --provenance=false
 
 # Push Docker image to registry
 .PHONY: push
 push:
 	#docker push $(IMAGE_TAG)
-	docker push $(LATEST_TAG)
+	nerdctl push $(LATEST_TAG)
 
 # Build and push in one command
 .PHONY: build-push

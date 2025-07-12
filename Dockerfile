@@ -1,5 +1,6 @@
 # Use a more specific base image that supports multiple architectures
-FROM --platform=$TARGETPLATFORM ubuntu:20.04
+# FROM --platform=$TARGETPLATFORM ubuntu:20.04
+FROM ghcr.io/astral-sh/uv:debian
 
 ENV OPENSSL_LEGACY_PROVIDER=1
 
@@ -14,17 +15,17 @@ ENV NODE_OPTIONS=--openssl-legacy-provider
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    python3-dev \
-    python3-venv \
+    # python3 \
+    # python3-pip \
+    # python3-dev \
+    # python3-venv \
     build-essential \
     curl \
     libssl-dev \
     postgresql-client \
     libpq-dev \
-    && rm -rf /var/lib/apt/lists/* \
-    && pip install scrypt
+    && rm -rf /var/lib/apt/lists/*
+    # && pip install scrypt
 
 # Create OpenSSL legacy config to fix the digital envelope issue
 RUN mkdir -p /etc/ssl
@@ -34,21 +35,22 @@ RUN echo "[openssl_init]\nlegacy = 1\nproviders = provider_sect\n\n[provider_sec
 # Set working directory
 WORKDIR /app
 
-
 # Set up a virtual environment
-RUN python3 -m venv /venv
-ENV PATH="/venv/bin:$PATH"
+# RUN python3 -m venv /venv
+# ENV PATH="/venv/bin:$PATH"
 
 # Upgrade pip
-RUN pip install --upgrade pip
+# RUN pip install --upgrade pip
 
 
 # Copy requirements and install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# COPY requirements.txt .
+# RUN pip install --no-cache-dir -r requirements.txt
+COPY pyproject.toml .
+RUN uv sync
 
 # Install gunicorn
-RUN pip install --no-cache-dir gunicorn==20.1.0
+#RUN pip install --no-cache-dir gunicorn==20.1.0
 
 # Copy application code
 COPY . .
@@ -71,4 +73,4 @@ EXPOSE 5001
 ARG TARGETPLATFORM
 
 # Use the absolute path to gunicorn from the virtual environment
-CMD ["/venv/bin/gunicorn", "--bind", "0.0.0.0:5001", "--workers=3", "--timeout=120", "app:app"]
+CMD ["/app/.venv/bin/gunicorn", "--bind", "0.0.0.0:5001", "--workers=3", "--timeout=120", "app:app"]
