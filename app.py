@@ -1,5 +1,3 @@
-r"""29a41de6a866d56c36aba5159f45257c"""
-
 import os
 from flask import (
     Flask,
@@ -19,12 +17,12 @@ from simplefin_client import SimpleFin
 import base64
 import pytz
 from config import get_config
-from extensions import login_manager, mail, migrate, scheduler
+from extensions import login_manager, mail, migrate, scheduler, init_db
 import re
 import json
 from datetime import datetime, timedelta
 from database import db
-
+from services.helpers import init_default_currencies
 from sqlalchemy import func, or_, and_, inspect, text
 
 from routes import register_blueprints
@@ -54,7 +52,7 @@ def create_app(config_object=None):
     if config_object is None:
         config_object = get_config()
     app.config.from_object(config_object)
-    register_blueprints(app)        
+    register_blueprints(app)
     # Initialize extensions with the app
     db.init_app(app)
     migrate.init_app(app, db)
@@ -137,7 +135,7 @@ def init_db():
         db.drop_all()  # This will drop all existing tables
         db.create_all()  # This will create new tables with current schema
         print("Database initialized successfully!")
-        
+
         # Create dev user in development mode
         if app.config['DEVELOPMENT_MODE']:
             dev_user = User(
@@ -162,91 +160,91 @@ def calculate_asset_debt_trends(current_user):
     Calculate asset and debt trends for a user's accounts
     """
     from datetime import datetime, timedelta
-    
+
     # Initialize tracking
     monthly_assets = {}
     monthly_debts = {}
-    
+
     # Get today's date and calculate a reasonable historical range (last 12 months)
     today = datetime.now()
     twelve_months_ago = today - timedelta(days=365)
-    
+
     # Get all accounts for the user
     accounts = Account.query.filter_by(user_id=current_user.id).all()
-    
+
     # Get user's preferred currency code
     user_currency_code = current_user.default_currency_code or 'USD'
-    
+
     # Calculate true total assets and debts directly from accounts (for accurate current total)
     direct_total_assets = 0
     direct_total_debts = 0
-    
+
     for account in accounts:
         # Get account's currency code, default to user's preferred currency
         account_currency_code = account.currency_code or user_currency_code
-        
+
         # Convert account balance to user's currency if needed
         if account_currency_code != user_currency_code:
             converted_balance = convert_currency(account.balance, account_currency_code, user_currency_code)
         else:
             converted_balance = account.balance
-        
+
         if account.type in ['checking', 'savings', 'investment'] and converted_balance > 0:
             direct_total_assets += converted_balance
         elif account.type in ['credit'] or converted_balance < 0:
             # For credit cards with negative balances (standard convention)
             direct_total_debts += abs(converted_balance)
-    
+
     # Process each account for historical trends
     for account in accounts:
         # Get account's currency code, default to user's preferred currency
         account_currency_code = account.currency_code or user_currency_code
-        
+
         # Categorize account types
         is_asset = account.type in ['checking', 'savings', 'investment'] and account.balance > 0
         is_debt = account.type in ['credit'] or account.balance < 0
-        
+
         # Skip accounts with zero or near-zero balance
         if abs(account.balance or 0) < 0.01:
             continue
-        
+
         # Get monthly transactions for this account
         transactions = Expense.query.filter(
             Expense.account_id == account.id,
             Expense.user_id == current_user.id,
             Expense.date >= twelve_months_ago
         ).order_by(Expense.date).all()
-        
+
         # Track balance over time
         balance_history = {}
         current_balance = account.balance or 0
-        
+
         # Start with the most recent balance
         balance_history[today.strftime('%Y-%m')] = current_balance
-        
+
         # Process transactions to track historical balances
         for transaction in transactions:
             month_key = transaction.date.strftime('%Y-%m')
-            
+
             # Consider currency conversion for each transaction if needed
             transaction_amount = transaction.amount
             if transaction.currency_code and transaction.currency_code != account_currency_code:
                 transaction_amount = convert_currency(transaction_amount, transaction.currency_code, account_currency_code)
-            
+
             # Adjust balance based on transaction
             if transaction.transaction_type == 'income':
                 current_balance += transaction_amount
             elif transaction.transaction_type == 'expense' or transaction.transaction_type == 'transfer':
                 current_balance -= transaction_amount
-            
+
             # Update monthly balance
             balance_history[month_key] = current_balance
-        
+
         # Convert balance history to user currency if needed
         if account_currency_code != user_currency_code:
             for month, balance in balance_history.items():
                 balance_history[month] = convert_currency(balance, account_currency_code, user_currency_code)
-        
+
         # Categorize and store balances
         for month, balance in balance_history.items():
             if is_asset:
@@ -255,23 +253,23 @@ def calculate_asset_debt_trends(current_user):
             elif is_debt:
                 # For debt accounts or negative balances, add the absolute value to the debt total
                 monthly_debts[month] = monthly_debts.get(month, 0) + abs(balance)
-    
+
     # Ensure consistent months across both series
     all_months = sorted(set(list(monthly_assets.keys()) + list(monthly_debts.keys())))
-    
+
     # Fill in missing months with previous values or zero
     assets_trend = []
     debts_trend = []
-    
+
     for month in all_months:
         assets_trend.append(monthly_assets.get(month, assets_trend[-1] if assets_trend else 0))
         debts_trend.append(monthly_debts.get(month, debts_trend[-1] if debts_trend else 0))
-    
+
     # Use the directly calculated totals rather than the trend values for accuracy
     total_assets = direct_total_assets
     total_debts = direct_total_debts
     net_worth = total_assets - total_debts
-    
+
     return {
         'months': all_months,
         'assets': assets_trend,
@@ -290,30 +288,30 @@ def determine_transaction_type(row, current_account_id=None):
     """
     type_column = request.form.get('type_column')
     negative_is_expense = 'negative_is_expense' in request.form
-    
+
     # Get description column name (default to 'Description')
     description_column = request.form.get('description_column', 'Description')
     description = row.get(description_column, '').strip()
-    
+
     # Get amount column name (default to 'Amount')
     amount_column = request.form.get('amount_column', 'Amount')
     amount_str = row.get(amount_column, '0').strip().replace('$', '').replace(',', '')
-    
+
     try:
         amount = float(amount_str)
     except ValueError:
         amount = 0
-    
+
     # First check for internal transfer
     if current_account_id:
         is_transfer, _, _ = detect_internal_transfer(description, amount, current_account_id)
         if is_transfer:
             return 'transfer'
-    
+
     # Check if there's a specific transaction type column
     if type_column and type_column in row:
         type_value = row[type_column].strip().lower()
-        
+
         # Map common terms to transaction types
         if type_value in ['expense', 'debit', 'purchase', 'payment', 'withdrawal']:
             return 'expense'
@@ -321,7 +319,7 @@ def determine_transaction_type(row, current_account_id=None):
             return 'income'
         elif type_value in ['transfer', 'move', 'xfer']:
             return 'transfer'
-    
+
     # If no type column or unknown value, try to determine from description
     if description:
         # Common transfer keywords
@@ -330,9 +328,9 @@ def determine_transaction_type(row, current_account_id=None):
         income_keywords = ['salary', 'deposit', 'refund', 'interest', 'dividend', 'payment received']
         # Common expense keywords
         expense_keywords = ['payment', 'purchase', 'fee', 'subscription', 'bill']
-        
+
         desc_lower = description.lower()
-        
+
         # Check for keywords in description
         if any(keyword in desc_lower for keyword in transfer_keywords):
             return 'transfer'
@@ -340,7 +338,7 @@ def determine_transaction_type(row, current_account_id=None):
             return 'income'
         elif any(keyword in desc_lower for keyword in expense_keywords):
             return 'expense'
-    
+
     # If still undetermined, use amount sign
     try:
         # Determine type based on amount sign and settings
@@ -366,18 +364,18 @@ def update_category_mappings(transaction_id, category_id, learn=False):
     transaction = Expense.query.get(transaction_id)
     if not transaction or not category_id:
         return False
-        
+
     if learn:
         # Extract a good keyword from the description
         keyword = extract_keywords(transaction.description)
-        
+
         # Check if a similar mapping already exists
         existing = CategoryMapping.query.filter_by(
             user_id=transaction.user_id,
             keyword=keyword,
             active=True
         ).first()
-        
+
         if existing:
             # Update the existing mapping
             existing.category_id = category_id
@@ -393,9 +391,9 @@ def update_category_mappings(transaction_id, category_id, learn=False):
             )
             db.session.add(new_mapping)
             db.session.commit()
-        
+
         return True
-        
+
     return False
 
 def extract_keywords(description):
@@ -405,21 +403,21 @@ def extract_keywords(description):
     """
     if not description:
         return ""
-        
+
     # Clean up description
     clean_desc = description.strip().lower()
-    
+
     # Split into words
     words = clean_desc.split()
-    
+
     # Remove common words that aren't useful for categorization
     stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'on', 'in', 'with', 'for', 'to', 'from', 'by', 'at', 'of'}
     filtered_words = [w for w in words if w not in stop_words and len(w) > 2]
-    
+
     if not filtered_words:
         # If no good words remain, use the longest word from the original
         return max(words, key=len) if words else ""
-    
+
     # Use the longest remaining word as the keyword
     # This is a simple approach - could be improved with more sophisticated NLP
     return max(filtered_words, key=len)
@@ -429,15 +427,15 @@ def create_default_category_mappings(user_id):
     """Create default category mappings for a new user"""
     # Check if user already has any mappings
     existing_mappings_count = CategoryMapping.query.filter_by(user_id=user_id).count()
-    
+
     # Only create defaults if user has no mappings
     if existing_mappings_count > 0:
         return
-    
+
     # Get user's categories to map to
     # We'll need to find the appropriate category IDs for the current user
     categories = {}
-    
+
     # Find common top-level categories
     for category_name in ["Food", "Transportation", "Housing", "Shopping", "Entertainment", "Health", "Personal", "Other"]:
         category = Category.query.filter_by(
@@ -445,19 +443,19 @@ def create_default_category_mappings(user_id):
             name=category_name,
             parent_id=None
         ).first()
-        
+
         if category:
             categories[category_name.lower()] = category.id
-            
+
             # Also get subcategories
             for subcategory in category.subcategories:
                 categories[subcategory.name.lower()] = subcategory.id
-    
+
     # If we couldn't find any categories, we can't create mappings
     if not categories:
         app.logger.warning(f"Could not create default category mappings for user {user_id}: no categories found")
         return
-    
+
     # Default mappings as (keyword, category_key, is_regex, priority)
     default_mappings = [
         # Food & Dining
@@ -608,13 +606,13 @@ def create_default_category_mappings(user_id):
         ("insurance", "health", False, 5),
     ]
 
-    
+
     # Create the mappings
     for keyword, category_key, is_regex, priority in default_mappings:
         # Check if we have a matching category for this keyword
         if category_key in categories:
             category_id = categories[category_key]
-            
+
             # Create the mapping
             mapping = CategoryMapping(
                 user_id=user_id,
@@ -625,9 +623,9 @@ def create_default_category_mappings(user_id):
                 match_count=0,
                 active=True
             )
-            
+
             db.session.add(mapping)
-    
+
     # Commit all mappings at once
     try:
         db.session.commit()
@@ -650,24 +648,24 @@ def update_currency_rates() -> int:
         if not base_currency:
             app.logger.error("No base currency found. Cannot update rates.")
             return -1
-            
+
         base_code = base_currency.code
-        
+
         # Use ExchangeRate-API (free tier - https://www.exchangerate-api.com/)
         # Or you can use another free API like https://frankfurter.app/
         response = requests.get(f'https://api.frankfurter.app/latest?from={base_code}')
-        
+
         if response.status_code != 200:
             app.logger.error(f"API request failed with status code {response.status_code}")
             return -1
-        
+
         data = response.json()
         rates = data.get('rates', {})
-        
+
         # Get all currencies except base
         currencies = Currency.query.filter(Currency.code != base_code).all()
         updated_count = 0
-        
+
         # Update rates
         for currency in currencies:
             if currency.code in rates:
@@ -676,12 +674,12 @@ def update_currency_rates() -> int:
                 updated_count += 1
             else:
                 app.logger.warning(f"No rate found for {currency.code}")
-        
+
         # Commit changes
         db.session.commit()
         app.logger.info(f"Updated {updated_count} currency rates")
         return updated_count
-        
+
     except Exception as e:
         app.logger.error(f"Error updating currency rates: {str(e)}")
         return -1
@@ -690,85 +688,85 @@ def convert_currency(amount: float, from_code: str, to_code: str) -> float:
     """Convert an amount from one currency to another"""
     if from_code == to_code:
         return amount
-    
+
     from_currency = Currency.query.filter_by(code=from_code).first()
     to_currency = Currency.query.filter_by(code=to_code).first()
-    
+
     if not from_currency or not to_currency:
         return amount  # Return original if either currency not found
-    
+
     # Get base currency for reference
     base_currency = Currency.query.filter_by(is_base=True).first()
     if not base_currency:
         return amount  # Cannot convert without a base currency
-    
+
     # First convert amount to base currency
     if from_code == base_currency.code:
         # Amount is already in base currency
         amount_in_base = amount
     else:
         # Convert from source currency to base currency
-        # The rate_to_base represents how much of the base currency 
+        # The rate_to_base represents how much of the base currency
         # equals 1 unit of this currency
         amount_in_base = amount * from_currency.rate_to_base
-    
+
     # Then convert from base currency to target currency
     if to_code == base_currency.code:
         # Target is base currency, so we're done
         return amount_in_base
     else:
         # Convert from base currency to target currency
-        # We divide by the target currency's rate_to_base to get 
+        # We divide by the target currency's rate_to_base to get
         # the equivalent amount in the target currency
         return amount_in_base / to_currency.rate_to_base
 
 def create_scheduled_expenses():
     """Create expense instances for active recurring expenses"""
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    
+
     # Find active recurring expenses
     active_recurring = RecurringExpense.query.filter_by(active=True).all()
-    
+
     for recurring in active_recurring:
         # Skip if end date is set and passed
         if recurring.end_date and recurring.end_date < today:
             continue
-            
+
         # Determine if we need to create an expense based on frequency and last created date
         create_expense = False
         last_date = recurring.last_created or recurring.start_date
-        
+
         if recurring.frequency == 'daily':
             # Create if last was created yesterday or earlier
             if (today - last_date).days >= 1:
                 create_expense = True
-                
+
         elif recurring.frequency == 'weekly':
             # Create if last was created 7 days ago or more
             if (today - last_date).days >= 7:
                 create_expense = True
-                
+
         elif recurring.frequency == 'monthly':
             # Create if we're in a new month from the last creation
             last_month = last_date.month
             last_year = last_date.year
-            
+
             current_month = today.month
             current_year = today.year
-            
+
             if current_year > last_year or (current_year == last_year and current_month > last_month):
                 create_expense = True
-                
+
         elif recurring.frequency == 'yearly':
             # Create if we're in a new year from the last creation
             if today.year > last_date.year:
                 create_expense = True
-        
+
         # Create the expense if needed
         if create_expense:
             expense = recurring.create_expense_instance(today)
             db.session.add(expense)
-    
+
     # Commit all changes
     if active_recurring:
         db.session.commit()
@@ -780,11 +778,11 @@ def calculate_iou_data(expenses, users):
         'i_owe': {},    # People current user owes
         'net_balance': 0  # Overall balance (positive if owed money)
     }
-    
+
     # Calculate balances
     for expense in expenses:
         splits = expense.calculate_splits()
-        
+
         # If current user is the payer
         if expense.paid_by == current_user.id:
             # Track what others owe current user
@@ -792,34 +790,34 @@ def calculate_iou_data(expenses, users):
                 user_id = split['email']
                 user_name = split['name']
                 amount = split['amount']
-                
+
                 if user_id not in iou_data['owes_me']:
                     iou_data['owes_me'][user_id] = {'name': user_name, 'amount': 0}
                 iou_data['owes_me'][user_id]['amount'] += amount
-        
+
         # If current user is in the splits (but not the payer)
         elif current_user.id in [split['email'] for split in splits['splits']]:
             payer_id = expense.paid_by
             payer = User.query.filter_by(id=payer_id).first()
-            
+
             # Find current user's split amount
             current_user_split = next((split['amount'] for split in splits['splits'] if split['email'] == current_user.id), 0)
-            
+
             if payer_id not in iou_data['i_owe']:
                 iou_data['i_owe'][payer_id] = {'name': payer.name, 'amount': 0}
             iou_data['i_owe'][payer_id]['amount'] += current_user_split
-    
+
     # Calculate net balance
     total_owed = sum(data['amount'] for data in iou_data['owes_me'].values())
     total_owing = sum(data['amount'] for data in iou_data['i_owe'].values())
     iou_data['net_balance'] = total_owed - total_owing
-    
+
     return iou_data
 
 def calculate_balances(user_id):
     """Calculate balances between the current user and all other users"""
     balances = {}
-    
+
     # Step 1: Calculate balances from expenses
     expenses = Expense.query.filter(
         or_(
@@ -827,10 +825,10 @@ def calculate_balances(user_id):
             Expense.split_with.like(f'%{user_id}%')
         )
     ).all()
-    
+
     for expense in expenses:
         splits = expense.calculate_splits()
-        
+
         # If current user paid for the expense
         if expense.paid_by == user_id:
             # Add what others owe to current user
@@ -849,16 +847,16 @@ def calculate_balances(user_id):
         else:
             # If someone else paid and current user owes them
             payer_id = expense.paid_by
-            
+
             # Find current user's portion
             current_user_portion = 0
-            
+
             # Check if current user is in the splits
             for split in splits['splits']:
                 if split['email'] == user_id:
                     current_user_portion = split['amount']
                     break
-            
+
             if current_user_portion > 0:
                 if payer_id not in balances:
                     payer = User.query.filter_by(id=payer_id).first()
@@ -869,7 +867,7 @@ def calculate_balances(user_id):
                         'amount': 0
                     }
                 balances[payer_id]['amount'] -= current_user_portion
-    
+
     # Step 2: Adjust balances based on settlements
     settlements = Settlement.query.filter(
         or_(
@@ -877,7 +875,7 @@ def calculate_balances(user_id):
             Settlement.receiver_id == user_id
         )
     ).all()
-    
+
     for settlement in settlements:
         if settlement.payer_id == user_id:
             # Current user paid money to someone else
@@ -891,9 +889,9 @@ def calculate_balances(user_id):
                     'amount': 0
                 }
             # FIX: When current user pays someone, it INCREASES how much they owe the current user
-            # Change from -= to += 
+            # Change from -= to +=
             balances[other_user_id]['amount'] += settlement.amount
-            
+
         elif settlement.receiver_id == user_id:
             # Current user received money from someone else
             other_user_id = settlement.payer_id
@@ -908,7 +906,7 @@ def calculate_balances(user_id):
             # FIX: When current user receives money, it DECREASES how much they're owed
             # Change from += to -=
             balances[other_user_id]['amount'] -= settlement.amount
-    
+
     # Return only non-zero balances
     return [balance for balance in balances.values() if abs(balance['amount']) > 0.01]
 
@@ -932,7 +930,7 @@ def get_base_currency():
             'symbol': base_currency.symbol,
             'name': base_currency.name
         }
-    
+
 
 @app.context_processor
 def utility_processor():
@@ -946,13 +944,13 @@ def utility_processor():
         # Use MD5 hash to generate a consistent color
         hash_object = hashlib.md5(user_id.encode())
         hash_hex = hash_object.hexdigest()
-        
+
         # Use the first 6 characters of the hash to create a color
         # This ensures a consistent but pseudo-random color
         r = int(hash_hex[:2], 16)
         g = int(hash_hex[2:4], 16)
         b = int(hash_hex[4:6], 16)
-        
+
         # Ensure the color is not too light
         brightness = (r * 299 + g * 587 + b * 114) / 1000
         if brightness > 180:
@@ -960,7 +958,7 @@ def utility_processor():
             r = min(r * 0.7, 255)
             g = min(g * 0.7, 255)
             b = min(b * 0.7, 255)
-        
+
         return f'rgb({r},{g},{b})'
 
     def get_user_by_id(user_id):
@@ -969,7 +967,7 @@ def utility_processor():
         Returns None if user not found to prevent template errors
         """
         return User.query.filter_by(id=user_id).first()
-    
+
     def get_category_icon_html(category):
         """
         Generate HTML for a category icon with proper styling
@@ -1016,22 +1014,22 @@ def utility_processor():
             result.append(cat_data)
 
         return result
-    
+
     def get_budget_status_for_category(category_id):
         """Get budget status for a specific category"""
         if not current_user.is_authenticated:
             return None
-            
+
         # Find active budget for this category
         budget = Budget.query.filter_by(
             user_id=current_user.id,
             category_id=category_id,
             active=True
         ).first()
-        
+
         if not budget:
             return None
-            
+
         return {
             'id': budget.id,
             'percentage': budget.get_progress_percentage(),
@@ -1040,7 +1038,7 @@ def utility_processor():
             'spent': budget.calculate_spent_amount(),
             'remaining': budget.get_remaining_amount()
         }
-    
+
     def get_account_by_id(account_id):
         """Retrieve an account by its ID"""
         return Account.query.get(account_id)
@@ -1054,28 +1052,28 @@ def utility_processor():
         'get_budget_status_for_category': get_budget_status_for_category,
         'get_account_by_id': get_account_by_id
     }
-    
+
 
 # Add to utility_processor to make budget info available in templates
 @app.context_processor
 def utility_processor():
     # Previous utility functions...
-    
+
     def get_budget_status_for_category(category_id):
         """Get budget status for a specific category"""
         if not current_user.is_authenticated:
             return None
-            
+
         # Find active budget for this category
         budget = Budget.query.filter_by(
             user_id=current_user.id,
             category_id=category_id,
             active=True
         ).first()
-        
+
         if not budget:
             return None
-            
+
         return {
             'id': budget.id,
             'percentage': budget.get_progress_percentage(),
@@ -1090,7 +1088,7 @@ def utility_processor():
     return {
         # Previous functions...
         'get_budget_status_for_category': get_budget_status_for_category,
-        'convert_currency': template_convert_currency 
+        'convert_currency': template_convert_currency
     }
 @app.context_processor
 def inject_app_version():
@@ -1107,7 +1105,7 @@ def handle_comparison_request():
     comparison_start = request.args.get('comparisonStart')
     comparison_end = request.args.get('comparisonEnd')
     metric = request.args.get('metric', 'spending')
-    
+
     # Convert string dates to datetime objects
     try:
         primary_start_date = datetime.strptime(primary_start, '%Y-%m-%d')
@@ -1116,7 +1114,7 @@ def handle_comparison_request():
         comparison_end_date = datetime.strptime(comparison_end, '%Y-%m-%d')
     except ValueError:
         return jsonify({'error': 'Invalid date format'}), 400
-    
+
     # Initialize response data structure
     result = {
         'primary': {
@@ -1133,7 +1131,7 @@ def handle_comparison_request():
         },
         'dateLabels': []  # Initialize date labels
     }
-    
+
     # Get expenses for both periods - reuse your existing query logic
     primary_query_filters = [
         or_(
@@ -1144,7 +1142,7 @@ def handle_comparison_request():
         Expense.date <= primary_end_date
     ]
     primary_expenses_raw = Expense.query.filter(and_(*primary_query_filters)).order_by(Expense.date).all()
-    
+
     comparison_query_filters = [
         or_(
             Expense.user_id == current_user.id,
@@ -1154,18 +1152,18 @@ def handle_comparison_request():
         Expense.date <= comparison_end_date
     ]
     comparison_expenses_raw = Expense.query.filter(and_(*comparison_query_filters)).order_by(Expense.date).all()
-    
+
     # Process expenses to get user's portion
     primary_expenses = []
     comparison_expenses = []
     primary_total = 0
     comparison_total = 0
-    
+
     # Process primary period expenses
     for expense in primary_expenses_raw:
         splits = expense.calculate_splits()
         user_portion = 0
-        
+
         if expense.paid_by == current_user.id:
             user_portion = splits['payer']['amount']
         else:
@@ -1173,7 +1171,7 @@ def handle_comparison_request():
                 if split['email'] == current_user.id:
                     user_portion = split['amount']
                     break
-        
+
         if user_portion > 0:
             expense_data = {
                 'id': expense.id,
@@ -1186,12 +1184,12 @@ def handle_comparison_request():
             }
             primary_expenses.append(expense_data)
             primary_total += user_portion
-    
+
     # Process comparison period expenses
     for expense in comparison_expenses_raw:
         splits = expense.calculate_splits()
         user_portion = 0
-        
+
         if expense.paid_by == current_user.id:
             user_portion = splits['payer']['amount']
         else:
@@ -1199,7 +1197,7 @@ def handle_comparison_request():
                 if split['email'] == current_user.id:
                     user_portion = split['amount']
                     break
-        
+
         if user_portion > 0:
             expense_data = {
                 'id': expense.id,
@@ -1212,47 +1210,47 @@ def handle_comparison_request():
             }
             comparison_expenses.append(expense_data)
             comparison_total += user_portion
-    
+
     # Update basic metrics
     result['primary']['totalSpending'] = primary_total
     result['primary']['transactionCount'] = len(primary_expenses)
     result['comparison']['totalSpending'] = comparison_total
     result['comparison']['transactionCount'] = len(comparison_expenses)
-    
+
     # Process data based on the selected metric
     if metric == 'spending':
         # Calculate daily spending for each period
         primary_daily = process_daily_spending(primary_expenses, primary_start_date, primary_end_date)
         comparison_daily = process_daily_spending(comparison_expenses, comparison_start_date, comparison_end_date)
-        
+
         # Normalize to 10 data points for consistent display
         result['primary']['dailyAmounts'] = normalize_time_series(primary_daily, 10)
         result['comparison']['dailyAmounts'] = normalize_time_series(comparison_daily, 10)
         result['dateLabels'] = [f'Day {i+1}' for i in range(10)]
-        
+
         # Debugging - log the daily spending data
         app.logger.info(f"Primary daily amounts: {result['primary']['dailyAmounts']}")
         app.logger.info(f"Comparison daily amounts: {result['comparison']['dailyAmounts']}")
-        
+
     elif metric == 'categories':
         # Get category spending for both periods
         primary_categories = {}
         comparison_categories = {}
-        
+
         # Process primary period categories
         for expense in primary_expenses:
             category = expense['category_name'] or 'Uncategorized'
             if category not in primary_categories:
                 primary_categories[category] = 0
             primary_categories[category] += expense['user_portion']
-            
+
         # Process comparison period categories
         for expense in comparison_expenses:
             category = expense['category_name'] or 'Uncategorized'
             if category not in comparison_categories:
                 comparison_categories[category] = 0
             comparison_categories[category] += expense['user_portion']
-        
+
         # Get top categories across both periods
         all_categories = set(list(primary_categories.keys()) + list(comparison_categories.keys()))
         top_categories = sorted(
@@ -1260,20 +1258,20 @@ def handle_comparison_request():
             key=lambda c: (primary_categories.get(c, 0) + comparison_categories.get(c, 0)),
             reverse=True
         )[:5]
-        
+
         result['categoryLabels'] = top_categories
         result['primary']['categoryAmounts'] = [primary_categories.get(cat, 0) for cat in top_categories]
         result['comparison']['categoryAmounts'] = [comparison_categories.get(cat, 0) for cat in top_categories]
-        
+
         # Set top category
         result['primary']['topCategory'] = max(primary_categories.items(), key=lambda x: x[1])[0] if primary_categories else 'None'
         result['comparison']['topCategory'] = max(comparison_categories.items(), key=lambda x: x[1])[0] if comparison_categories else 'None'
-        
+
     elif metric == 'tags':
         # Similar logic for tags - adapt based on your data model
         primary_tags = {}
         comparison_tags = {}
-        
+
         # For primary period
         for expense in primary_expenses:
             # Get tags for this expense - adapt to your model
@@ -1283,7 +1281,7 @@ def handle_comparison_request():
                     if tag.name not in primary_tags:
                         primary_tags[tag.name] = 0
                     primary_tags[tag.name] += expense['user_portion']
-        
+
         # For comparison period
         for expense in comparison_expenses:
             expense_obj = Expense.query.get(expense['id'])
@@ -1292,7 +1290,7 @@ def handle_comparison_request():
                     if tag.name not in comparison_tags:
                         comparison_tags[tag.name] = 0
                     comparison_tags[tag.name] += expense['user_portion']
-        
+
         # Get top tags
         all_tags = set(list(primary_tags.keys()) + list(comparison_tags.keys()))
         top_tags = sorted(
@@ -1300,16 +1298,16 @@ def handle_comparison_request():
             key=lambda t: (primary_tags.get(t, 0) + comparison_tags.get(t, 0)),
             reverse=True
         )[:5]
-        
+
         result['tagLabels'] = top_tags
         result['primary']['tagAmounts'] = [primary_tags.get(tag, 0) for tag in top_tags]
         result['comparison']['tagAmounts'] = [comparison_tags.get(tag, 0) for tag in top_tags]
-        
+
     elif metric == 'payment':
         # Payment method comparison
         primary_payment = {}
         comparison_payment = {}
-        
+
         # For primary period - only count what the user paid directly
         for expense in primary_expenses:
             if expense['paid_by'] == current_user.id:
@@ -1320,7 +1318,7 @@ def handle_comparison_request():
                     if card not in primary_payment:
                         primary_payment[card] = 0
                     primary_payment[card] += expense['user_portion']
-        
+
         # For comparison period
         for expense in comparison_expenses:
             if expense['paid_by'] == current_user.id:
@@ -1330,14 +1328,14 @@ def handle_comparison_request():
                     if card not in comparison_payment:
                         comparison_payment[card] = 0
                     comparison_payment[card] += expense['user_portion']
-        
+
         # Combine payment methods
         all_methods = set(list(primary_payment.keys()) + list(comparison_payment.keys()))
-        
+
         result['paymentLabels'] = list(all_methods)
         result['primary']['paymentAmounts'] = [primary_payment.get(method, 0) for method in all_methods]
         result['comparison']['paymentAmounts'] = [comparison_payment.get(method, 0) for method in all_methods]
-    
+
     return jsonify(result)
 
 
@@ -1382,7 +1380,7 @@ with app.app_context():
     try:
         print("Creating database tables...")
         db.create_all()
-        extensions.init_db()
+        init_db()
         init_default_currencies()
         print("Tables created successfully")
     except Exception as e:
@@ -1390,7 +1388,7 @@ with app.app_context():
 
 # Register OIDC routes
 if oidc_enabled:
-    register_oidc_routes(app, User, db)        
+    register_oidc_routes(app, User, db)
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001)

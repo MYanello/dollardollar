@@ -25,7 +25,7 @@ from routes.user_routes import user_bp
 
 def register_blueprints(app: Flask):
     """Register all route blueprints with the app."""
-    app.register_blueprint(account_bp, url_prefix="/accounts")
+    app.register_blueprint(account_bp, url_prefix="/")
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(admin_bp, url_prefix="/admin")
     app.register_blueprint(budget_bp, url_prefix="/budgets")
