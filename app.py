@@ -8,7 +8,6 @@ from flask import (
 from flask_login import (
     current_user,
 )
-from services.defaults import create_default_budgets, create_default_categories
 import logging
 import ssl
 from oidc_auth import setup_oidc_config, register_oidc_routes
@@ -125,26 +124,26 @@ if oidc_enabled:
 def load_user(id):
     return User.query.filter_by(id=id).first()
 
-def init_db():
-    """Initialize the database"""
-    with app.app_context():
-        db.drop_all()  # This will drop all existing tables
-        db.create_all()  # This will create new tables with current schema
-        print("Database initialized successfully!")
+# def init_db():
+#     """Initialize the database"""
+#     with app.app_context():
+#         db.drop_all()  # This will drop all existing tables
+#         db.create_all()  # This will create new tables with current schema
+#         print("Database initialized successfully!")
 
-        # Create dev user in development mode
-        if app.config['DEVELOPMENT_MODE']:
-            dev_user = User(
-                id=DEV_USER_EMAIL,
-                name='Developer',
-                is_admin=True
-            )
-            dev_user.set_password(DEV_USER_PASSWORD)
-            db.session.add(dev_user)
-            db.session.commit()
-            create_default_categories(dev_user.id)
-            create_default_budgets(dev_user.id)
-            print("Development user created:", DEV_USER_EMAIL)
+#         # Create dev user in development mode
+#         if app.config['DEVELOPMENT_MODE']:
+#             dev_user = User(
+#                 id=DEV_USER_EMAIL,
+#                 name='Developer',
+#                 is_admin=True
+#             )
+#             dev_user.set_password(DEV_USER_PASSWORD)
+#             db.session.add(dev_user)
+#             db.session.commit()
+#             create_default_categories(dev_user.id)
+#             create_default_budgets(dev_user.id)
+#             print("Development user created:", DEV_USER_EMAIL)
 
 #--------------------
 # BUSINESS LOGIC FUNCTIONS

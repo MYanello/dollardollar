@@ -19,4 +19,3 @@ push:
 # Build and push in one command
 .PHONY: build-push
 build-push: build push
-

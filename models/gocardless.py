@@ -34,11 +34,11 @@ class Agreement(Base):
     scope_details: Mapped[bool] = mapped_column()
     scope_transactions: Mapped[bool] = mapped_column()
     expiry_date: Mapped[dt] = mapped_column(nullable=False)
-    created_at: Mapped[dt] = mapped_column(default=dt.now(tz.utc))
-
     requisitions: Mapped[list["Requisition"]] = relationship(
-        "Requisition", back_populates="agreement", lazy=True, init=False
+        "Requisition", back_populates="agreement", lazy=True
     )
+
+    created_at: Mapped[dt] = mapped_column(default=dt.now(tz.utc))
 
     @hybrid_property
     def expired(self) -> bool:  # type: ignore[reportRedeclaration]
@@ -73,17 +73,11 @@ class Requisition(Base):
     )
 
     user: Mapped["User"] = relationship(
-        "User",
-        back_populates="requisitions",
-        lazy=True,
-        init=False,
+        "User", back_populates="requisitions", lazy=True
     )
 
     agreement: Mapped["Agreement"] = relationship(
-        "Agreement",
-        back_populates="requisitions",
-        lazy=True,
-        init=False,
+        "Agreement", back_populates="requisitions", lazy=True
     )
 
     created_at: Mapped[dt] = mapped_column(default=dt.now(tz.utc))
@@ -94,13 +88,17 @@ class GoCardlessSettings(Base):
 
     __tablename__: ClassVar[str] = "GoCardless"
 
-    id: Mapped[int] = mapped_column(primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[str] = mapped_column(
         String(120), ForeignKey("users.id"), nullable=False, unique=True
     )
     access_token: Mapped[str] = mapped_column(Text, nullable=False)
     refresh_token: Mapped[str] = mapped_column(Text, nullable=False)
 
+    # Relationship with User
+    user: Mapped["User"] = relationship(
+        "User", back_populates="gocardless", uselist=False, lazy=True
+    )
     last_sync: Mapped[Optional[dt]] = mapped_column(default=None)
 
     temp_accounts: Mapped[Optional[str]] = mapped_column(Text, default=None)
@@ -115,15 +113,6 @@ class GoCardlessSettings(Base):
     updated_at: Mapped[dt] = mapped_column(
         default=dt.now(tz.utc),
         onupdate=dt.now(tz.utc),
-    )
-
-    # Relationship with User
-    user: Mapped["User"] = relationship(
-        "User",
-        back_populates="gocardless",
-        uselist=False,
-        lazy=True,
-        init=False,
     )
 
     def __repr__(self):

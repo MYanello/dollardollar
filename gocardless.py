@@ -86,12 +86,12 @@ def process_token() -> Response:
         )
 
         # Usually 30 days after the token was obtained
-        refresh_expiration: datetime = datetime.now() + timedelta(
+        refresh_expiration: datetime = datetime.now(tz.utc) + timedelta(
             seconds=int(tokens["refresh_expires"])
         )
 
         # Usually 24 hours after the token was obtained
-        access_expiration: datetime = datetime.now() + timedelta(
+        access_expiration: datetime = datetime.now(tz.utc) + timedelta(
             seconds=int(tokens["access_expires"])
         )
 
