@@ -13,7 +13,7 @@
     <!-- Add Expense Form (Hidden by default) -->
     <div id="expenseFormContainer" class="expense-form mb-4" style="display: none;">
         <h4 class="mb-3">Add New Expense</h4>
-        <form method="POST" action="{{ url_for('add_expense') }}">
+        <form method="POST" action="{{ url_for('expense.add_expense') }}">
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label for="description" class="form-label">Description</label>

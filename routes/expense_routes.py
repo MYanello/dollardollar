@@ -21,7 +21,7 @@ expense_bp = Blueprint("expense", __name__)
 
 @expense_bp.route("/add_expense", methods=["POST"])
 @login_required_dev
-def add_expense():  # noqa: C901, PLR0912, PLR0915
+def add_expense():  # noqa: PLR0915
     """Add a new transaction (expense, income, or transfer)."""
     if request.method == "POST":
         try:
@@ -48,7 +48,7 @@ def add_expense():  # noqa: C901, PLR0912, PLR0915
                         "Please select at least one person to split with "
                         "or mark as personal expense."
                     )
-                    return redirect(url_for("transactions"))
+                    return redirect(url_for("transaction.transactions"))
 
                 split_with_str = (
                     ",".join(split_with_ids) if split_with_ids else None
@@ -61,7 +61,7 @@ def add_expense():  # noqa: C901, PLR0912, PLR0915
                 )
             except ValueError:
                 flash("Invalid date format. Please use YYYY-MM-DD format.")
-                return redirect(url_for("transactions"))
+                return redirect(url_for("transaction.transactions"))
 
             # Carefully process split details
             split_details = None
@@ -105,14 +105,16 @@ def add_expense():  # noqa: C901, PLR0912, PLR0915
             original_amount = float(request.form["amount"])
 
             # Find the currencies
-            selected_currency = Currency.query.filter_by(
-                code=currency_code
-            ).first()
-            base_currency = Currency.query.filter_by(is_base=True).first()
+            selected_currency = (
+                db.session.query(Currency).filter_by(code=currency_code).first()
+            )
+            base_currency = (
+                db.session.query(Currency).filter_by(is_base=True).first()
+            )
 
             if not selected_currency or not base_currency:
                 flash("Currency configuration error.")
-                return redirect(url_for("transactions"))
+                return redirect(url_for("transaction.transactions"))
 
             # Convert original amount to base currency
             amount = original_amount * selected_currency.rate_to_base
@@ -156,7 +158,7 @@ def add_expense():  # noqa: C901, PLR0912, PLR0915
                         "Source and destination accounts must be "
                         "different for transfers."
                     )
-                    return redirect(url_for("transactions"))
+                    return redirect(url_for("transaction.transactions"))
 
             # Determine paid_by (use from form or fallback to current user)
             paid_by = request.form.get("paid_by", current_user.id)
@@ -202,7 +204,7 @@ def add_expense():  # noqa: C901, PLR0912, PLR0915
             flash(f"Error: {e!s}")
             current_app.logger.exception("Error adding expense:")
 
-    return redirect(url_for("transactions"))
+    return redirect(url_for("transaction.transactions"))
 
 
 @expense_bp.route("/delete_expense/<int:expense_id>", methods=["POST"])
@@ -211,7 +213,7 @@ def delete_expense(expense_id):
     """Delete an expense by ID."""
     try:
         # Find the expense
-        expense = Expense.query.get_or_404(expense_id)
+        expense = db.get_or_404(Expense, expense_id)
 
         # Security check: Only the creator can delete the expense
         if expense.user_id != current_user.id:
@@ -224,7 +226,7 @@ def delete_expense(expense_id):
                     }
                 ), 403
             flash("You do not have permission to delete this expense")
-            return redirect(url_for("transactions"))
+            return redirect(url_for("transaction.transactions"))
 
         # Delete the expense
         db.session.delete(expense)
@@ -236,7 +238,7 @@ def delete_expense(expense_id):
                 {"success": True, "message": "Expense deleted successfully"}
             )
         flash("Expense deleted successfully")
-        return redirect(url_for("transactions"))
+        return redirect(url_for("transaction.transactions"))
 
     except Exception as e:
         db.session.rollback()
@@ -245,7 +247,7 @@ def delete_expense(expense_id):
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return jsonify({"success": False, "message": f"Error: {e!s}"}), 500
         flash(f"Error: {e!s}")
-        return redirect(url_for("transactions"))
+        return redirect(url_for("transaction.transactions"))
 
 
 @expense_bp.route("/get_expense/<int:expense_id>", methods=["GET"])
@@ -254,7 +256,7 @@ def get_expense(expense_id):
     """Get expense details for editing."""
     try:
         # Find the expense
-        expense = Expense.query.get_or_404(expense_id)
+        expense = db.get_or_404(Expense, expense_id)
 
         # Security check: Only the creator or participants
         # can view the expense details
@@ -311,16 +313,16 @@ def get_expense(expense_id):
 
 @expense_bp.route("/update_expense/<int:expense_id>", methods=["POST"])
 @login_required_dev
-def update_expense(expense_id):  # noqa: C901, PLR0912, PLR0915
+def update_expense(expense_id):  # noqa: PLR0915
     """Update an existing expense with improved category split handling."""
     try:
         # Find the expense
-        expense = Expense.query.get_or_404(expense_id)
+        expense = db.get_or_404(Expense, expense_id)
 
         # Security check
         if expense.user_id != current_user.id:
             flash("You do not have permission to edit this expense")
-            return redirect(url_for("transactions"))
+            return redirect(url_for("transaction.transactions"))
 
         # Log incoming data for debugging
         current_app.logger.info("Update expense request data: %s", request.form)
@@ -361,7 +363,9 @@ def update_expense(expense_id):  # noqa: C901, PLR0912, PLR0915
             expense.category_id = None
 
             # Clear any existing splits
-            CategorySplit.query.filter_by(expense_id=expense.id).delete()
+            db.session.query(CategorySplit).filter_by(
+                expense_id=expense.id
+            ).delete()
 
             # Get split data from form
             split_data = request.form.get("category_splits_data", "[]")
@@ -430,7 +434,9 @@ def update_expense(expense_id):  # noqa: C901, PLR0912, PLR0915
                     )
 
             # Clear any existing splits when not using splits
-            CategorySplit.query.filter_by(expense_id=expense.id).delete()
+            db.session.query(CategorySplit).filter_by(
+                expense_id=expense.id
+            ).delete()
 
         # Handle account_id safely
         account_id = request.form.get("account_id")
@@ -522,11 +528,11 @@ def update_expense(expense_id):  # noqa: C901, PLR0912, PLR0915
         db.session.commit()
         flash("Transaction updated successfully!")
 
-        return redirect(url_for("transactions"))
+        return redirect(url_for("transaction.transactions"))
 
     except Exception as e:
         db.session.rollback()
         current_app.logger.exception("Error updating expense %s:", expense_id)
         flash(f"Error: {e!s}")
 
-        return redirect(url_for("transactions"))
+        return redirect(url_for("transaction.transactions"))

@@ -1,10 +1,11 @@
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 
 from flask import Blueprint, jsonify, render_template
 from flask_login import current_user
 from sqlalchemy import and_, or_
 
+from database import db
 from models import (
     Account,
     Category,
@@ -30,7 +31,8 @@ def get_transaction_details(other_user_id):
     """Fetch transaction details between current user and another user."""
     # Query expenses involving both users
     expenses = (
-        Expense.query.filter(
+        db.session.query(Expense)
+        .filter(
             or_(
                 and_(
                     Expense.user_id == current_user.id,
@@ -49,7 +51,8 @@ def get_transaction_details(other_user_id):
 
     # Query settlements between both users
     settlements = (
-        Settlement.query.filter(
+        db.session.query(Settlement)
+        .filter(
             or_(
                 and_(
                     Settlement.payer_id == current_user.id,
@@ -92,8 +95,12 @@ def get_transaction_details(other_user_id):
                     "date": settlement.date.strftime("%Y-%m-%d"),
                     "description": settlement.description,
                     "amount": settlement.amount,
-                    "payer": User.query.get(settlement.payer_id).name,
-                    "receiver": User.query.get(settlement.receiver_id).name,
+                    "payer": db.session.query(User)
+                    .get(settlement.payer_id)
+                    .name,
+                    "receiver": db.session.query(User)
+                    .get(settlement.receiver_id)
+                    .name,
                 }
             ]
         )
@@ -107,13 +114,14 @@ def get_transaction_details(other_user_id):
 @transaction_bp.route("/transactions")
 @login_required_dev
 @demo_time_limited
-def transactions():  # noqa: C901 PLR0912 PLR0915
+def transactions():  # noqa: PLR0915
     """Display all transactions with filtering capabilities."""
     # Fetch all expenses where the user is either the creator
     # or a split participant
     base_currency = get_base_currency()
     expenses = (
-        Expense.query.filter(
+        db.session.query(Expense)
+        .filter(
             or_(
                 Expense.user_id == current_user.id,
                 Expense.split_with.like(f"%{current_user.id}%"),
@@ -123,15 +131,16 @@ def transactions():  # noqa: C901 PLR0912 PLR0915
         .all()
     )
 
-    users = User.query.all()
+    users = db.session.query(User).all()
 
     # Pre-calculate all expense splits to avoid repeated calculations
     expense_splits = {}
     for expense in expenses:
         expense_splits[expense.id] = expense.calculate_splits()
 
-    # Calculate total expenses for current user (similar to dashboard calculation)
-    now = datetime.now()
+    # Calculate total expenses for current user
+    # (similar to dashboard calculation)
+    now = datetime.now(UTC)
     current_year = now.year
     total_expenses = 0
 
@@ -185,7 +194,7 @@ def transactions():  # noqa: C901 PLR0912 PLR0915
     monthly_totals = {}
     unique_cards = set()
 
-    currencies = Currency.query.all()
+    currencies = db.session.query(Currency).all()
     for expense in expenses:
         month_key = expense.date.strftime("%Y-%m")
         if month_key not in monthly_totals:
@@ -249,19 +258,21 @@ def transactions():  # noqa: C901 PLR0912 PLR0915
 def get_transaction_form_html():
     """Return the HTML for the add transaction form."""
     base_currency = get_base_currency()
-    users = User.query.all()
+    users = db.session.query(User).all()
     groups = (
-        Group.query.join(group_users)
+        db.session.query(Group)
+        .join(group_users)
         .filter(group_users.c.user_id == current_user.id)
         .all()
     )
     categories = (
-        Category.query.filter_by(user_id=current_user.id)
+        db.session.query(Category)
+        .filter_by(user_id=current_user.id)
         .order_by(Category.name)
         .all()
     )
-    currencies = Currency.query.all()
-    tags = Tag.query.filter_by(user_id=current_user.id).all()  # Add tags
+    currencies = db.session.query(Currency).all()
+    tags = db.session.query(Tag).filter_by(user_id=current_user.id).all()
     return render_template(
         "partials/add_transaction_form.html",
         users=users,
@@ -276,8 +287,8 @@ def get_transaction_form_html():
 @transaction_bp.route("/get_expense_edit_form/<int:expense_id>")
 @login_required_dev
 def get_expense_edit_form(expense_id):
-    """Return the HTML for editing an expense, including category splits data."""
-    expense = Expense.query.get_or_404(expense_id)
+    """Return the HTML for editing an expense, including category split data."""
+    expense = db.session.query(Expense).get(expense_id)
 
     # Security check
     if expense.user_id != current_user.id and current_user.id not in (
@@ -289,7 +300,11 @@ def get_expense_edit_form(expense_id):
     category_splits_data = []
     if expense.has_category_splits:
         # Get all category splits for this expense
-        splits = CategorySplit.query.filter_by(expense_id=expense.id).all()
+        splits = (
+            db.session.query(CategorySplit)
+            .filter_by(expense_id=expense.id)
+            .all()
+        )
         for split in splits:
             category_splits_data.extend(
                 {"category_id": split.category_id, "amount": split.amount}
@@ -301,20 +316,24 @@ def get_expense_edit_form(expense_id):
     )
 
     base_currency = get_base_currency()
-    users = User.query.all()
+    users = db.session.query(User).all()
     groups = (
-        Group.query.join(group_users)
+        db.session.query(Group)
+        .join(group_users)
         .filter(group_users.c.user_id == current_user.id)
         .all()
     )
     categories = (
-        Category.query.filter_by(user_id=current_user.id)
+        db.session.query(Category)
+        .filter_by(user_id=current_user.id)
         .order_by(Category.name)
         .all()
     )
-    currencies = Currency.query.all()
+    currencies = db.session.query(Currency).all()
 
-    accounts = Account.query.filter_by(user_id=current_user.id).all()
+    accounts = (
+        db.session.query(Account).filter_by(user_id=current_user.id).all()
+    )
     return render_template(
         "partials/edit_transaction_form.html",
         expense=expense,
