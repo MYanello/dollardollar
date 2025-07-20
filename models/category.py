@@ -1,5 +1,4 @@
-from datetime import datetime
-from datetime import timezone as tz
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, ClassVar, Optional
 
 from sqlalchemy import ForeignKey, String
@@ -44,7 +43,7 @@ class Category(Base):
         "Expense", back_populates="category", lazy=True, init=False
     )
 
-    parent_id: Mapped[Optional[int]] = mapped_column(
+    parent_id: Mapped[int | None] = mapped_column(
         ForeignKey("categories.id"), default=None
     )
 
@@ -56,7 +55,7 @@ class Category(Base):
     is_system: Mapped[bool] = mapped_column(
         default=False
     )  # System categories can't be deleted
-    created_at: Mapped[datetime] = mapped_column(default=datetime.now(tz.utc))
+    created_at: Mapped[datetime] = mapped_column(default=datetime.now(UTC))
 
     budgets: Mapped[list["Budget"]] = relationship(
         "Budget", back_populates="category", lazy=True, init=False
@@ -96,7 +95,7 @@ class CategorySplit(Base):
         ForeignKey("categories.id"), nullable=False
     )
     amount: Mapped[float] = mapped_column(nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         String(200), nullable=True, default=None
     )
 
@@ -143,7 +142,7 @@ class CategoryMapping(Base):
         default=0
     )  # How many times this mapping has been used
     active: Mapped[bool] = mapped_column(default=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.now(tz.utc))
+    created_at: Mapped[datetime] = mapped_column(default=datetime.now(UTC))
 
     def __repr__(self) -> str:
         """Return string representation of category mapping information."""

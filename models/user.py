@@ -1,6 +1,5 @@
 import secrets
-from datetime import datetime, timedelta
-from datetime import timezone as tz
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, ClassVar, Optional
 
 from flask_login import UserMixin
@@ -12,9 +11,9 @@ from sqlalchemy.orm import (
 )
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from database import db
 from tables import group_users
 
+from .base import Base
 from .group import Group
 
 if TYPE_CHECKING:
@@ -35,7 +34,7 @@ if TYPE_CHECKING:
     )
 
 
-class User(db.Model, UserMixin):
+class User(Base, UserMixin):
     """Stores user information and settings."""
 
     __tablename__: ClassVar[str] = "users"
@@ -46,31 +45,32 @@ class User(db.Model, UserMixin):
 
     name: Mapped[str] = mapped_column(String(100))
     expenses: Mapped[Optional["Expense"]] = relationship(
-        "Expense", back_populates="user", lazy=True
+        "Expense", back_populates="user", lazy=True, init=False
     )
     default_currency: Mapped[Optional["Currency"]] = relationship(
-        "Currency", back_populates="users", lazy=True
+        "Currency", back_populates="users", lazy=True, init=False
     )
     created_groups: Mapped[Optional["Group"]] = relationship(
         "Group",
         back_populates="creator",
         lazy=True,
         foreign_keys=[Group.created_by],
+        init=False,
     )
     accounts: Mapped[list["Account"]] = relationship(
-        "Account", back_populates="user", lazy=True
+        "Account", back_populates="user", lazy=True, init=False
     )
 
     budgets: Mapped[list["Budget"]] = relationship(
-        "Budget", back_populates="user", lazy=True
+        "Budget", back_populates="user", lazy=True, init=False
     )
 
     categories: Mapped[list["Category"]] = relationship(
-        "Category", back_populates="user", lazy=True
+        "Category", back_populates="user", lazy=True, init=False
     )
 
     category_mappings: Mapped[list["CategoryMapping"]] = relationship(
-        "CategoryMapping", back_populates="user", lazy=True
+        "CategoryMapping", back_populates="user", lazy=True, init=False
     )
 
     groups: Mapped[list["Group"]] = relationship(
@@ -78,29 +78,31 @@ class User(db.Model, UserMixin):
         back_populates="members",
         secondary=group_users,
         lazy="subquery",
+        init=False,
     )
 
     requisitions: Mapped[list["Requisition"]] = relationship(
-        "Requisition", back_populates="user", lazy=True
+        "Requisition", back_populates="user", lazy=True, init=False
     )
 
     gocardless: Mapped["GoCardlessSettings"] = relationship(
-        "GoCardlessSettings", back_populates="user", lazy=True
+        "GoCardlessSettings", back_populates="user", lazy=True, init=False
     )
 
     recurring_expenses: Mapped[list["RecurringExpense"]] = relationship(
-        "RecurringExpense", back_populates="user", lazy=True
+        "RecurringExpense", back_populates="user", lazy=True, init=False
     )
 
     ignored_patterns: Mapped[list["IgnoredRecurringPattern"]] = relationship(
-        "IgnoredRecurringPattern", back_populates="user", lazy=True
+        "IgnoredRecurringPattern", back_populates="user", lazy=True, init=False
     )
 
     settlements_paid: Mapped[list["Settlement"]] = relationship(
         "Settlement",
         back_populates="payer",
         foreign_keys="Settlement.payer_id",
-        lazy=True
+        lazy=True,
+        init=False,
     )
 
     settlements_received: Mapped[list["Settlement"]] = relationship(
@@ -108,44 +110,41 @@ class User(db.Model, UserMixin):
         back_populates="receiver",
         foreign_keys="Settlement.receiver_id",
         lazy=True,
+        init=False,
     )
 
     simplefin: Mapped[Optional["SimpleFinSettings"]] = relationship(
-        "SimpleFinSettings", back_populates="user", lazy=True
+        "SimpleFinSettings", back_populates="user", lazy=True, init=False
     )
 
     tags: Mapped[list["Tag"]] = relationship(
-        "Tag", back_populates="user", lazy=True
+        "Tag", back_populates="user", lazy=True, init=False
     )
-    password_hash: Mapped[Optional[str]] = mapped_column(
-        String(256), default=None
-    )
-    reset_token: Mapped[Optional[str]] = mapped_column(
-        String(100), default=None
-    )
-    reset_token_expiry: Mapped[Optional[datetime]] = mapped_column(
+
+    password_hash: Mapped[str | None] = mapped_column(String(256), default=None)
+    reset_token: Mapped[str | None] = mapped_column(String(100), default=None)
+    reset_token_expiry: Mapped[datetime | None] = mapped_column(
         nullable=True, default=None
     )
-    default_currency_code: Mapped[Optional[str]] = mapped_column(
+    default_currency_code: Mapped[str | None] = mapped_column(
         String(3), ForeignKey("currencies.code"), default=None
     )
     # OIDC related fields
-    oidc_id: Mapped[Optional[str]] = mapped_column(
+    oidc_id: Mapped[str | None] = mapped_column(
         String(255), index=True, unique=True, default=None
     )
-    oidc_provider: Mapped[Optional[str]] = mapped_column(
-        String(50), default=None
-    )
-    last_login: Mapped[Optional[datetime]] = mapped_column(default=None)
+    oidc_provider: Mapped[str | None] = mapped_column(String(50), default=None)
+    last_login: Mapped[datetime | None] = mapped_column(default=None)
 
     user_color: Mapped[str] = mapped_column(String(7), default="#15803d")
 
     is_admin: Mapped[bool] = mapped_column(default=False)
     monthly_report_enabled: Mapped[bool] = mapped_column(default=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.now(tz.utc))
+    created_at: Mapped[datetime] = mapped_column(default=datetime.now(UTC))
     timezone: Mapped[str] = mapped_column(
         String(50), nullable=True, default="UTC"
     )
+
     def set_password(self, password):
         """Hash password and store it."""
         self.password_hash = generate_password_hash(
@@ -165,7 +164,7 @@ class User(db.Model, UserMixin):
     def generate_reset_token(self):
         """Generate a password reset token that expires in 1 hour."""
         self.reset_token = secrets.token_urlsafe(32)
-        self.reset_token_expiry = datetime.now(tz.utc) + timedelta(hours=1)
+        self.reset_token_expiry = datetime.now(UTC) + timedelta(hours=1)
         return self.reset_token
 
     def verify_reset_token(self, token):
@@ -174,10 +173,10 @@ class User(db.Model, UserMixin):
             return False
         return not (
             not self.reset_token_expiry
-            or self.reset_token_expiry < datetime.now(tz.utc)
+            or self.reset_token_expiry < datetime.now(UTC)
         )
 
     def clear_reset_token(self):
         """Clear the reset token and expiry after use."""
         self.reset_token = "None"
-        self.reset_token_expiry = datetime.now(tz.utc)
+        self.reset_token_expiry = datetime.now(UTC)

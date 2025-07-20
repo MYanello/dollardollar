@@ -86,6 +86,6 @@ config_by_name = {
 
 
 def get_config():
-    """Return the appropriate configuration object based on environment"""
+    """Return the appropriate configuration object based on environment."""
     env = os.getenv("FLASK_ENV", "production")
     return config_by_name.get(env, ProductionConfig)

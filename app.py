@@ -67,22 +67,22 @@ def create_app(config_object=None):
     mail.init_app(app)
     scheduler.init_app(app)
     check_db_structure(app)
+    logging.basicConfig(level=getattr(logging, app.config["LOG_LEVEL"]))
 
     # Database initialization at application startup
     with app.app_context():
         try:
-            print("Creating database tables...")
+            app.logger.info("Creating database tables...")
             db.create_all()
             init_db()
             init_default_currencies()
-            print("Tables created successfully")
-        except Exception as e:
-            print(f"ERROR CREATING TABLES: {e!s}")
+            app.logger.info("Tables created successfully")
+        except Exception:
+            app.logger.exception("ERROR CREATING TABLES")
     return app
 
 
 app = create_app()
-logging.basicConfig(level=getattr(logging, app.config["LOG_LEVEL"]))
 app.config["SIMPLEFIN_ENABLED"] = (
     os.getenv("SIMPLEFIN_ENABLED", "True").lower() == "true"
 )
@@ -133,14 +133,6 @@ scheduler.start()
 simplefin_client = SimpleFin(app)
 
 oidc_enabled = setup_oidc_config(app)
-# db = SQLAlchemy(app)
-# login_manager = LoginManager()
-# login_manager.init_app(app)
-# login_manager.login_view = 'login'
-
-
-# migrate = Migrate(app, db)
-
 
 # Initialize demo timeout middleware
 demo_timeout = DemoTimeout(
@@ -161,33 +153,7 @@ if oidc_enabled:
 
 @login_manager.user_loader
 def load_user(id):
-    return User.query.filter_by(id=id).first()
-
-
-# def init_db():
-#     """Initialize the database"""
-#     with app.app_context():
-#         db.drop_all()  # This will drop all existing tables
-#         db.create_all()  # This will create new tables with current schema
-#         print("Database initialized successfully!")
-
-#         # Create dev user in development mode
-#         if app.config['DEVELOPMENT_MODE']:
-#             dev_user = User(
-#                 id=DEV_USER_EMAIL,
-#                 name='Developer',
-#                 is_admin=True
-#             )
-#             dev_user.set_password(DEV_USER_PASSWORD)
-#             db.session.add(dev_user)
-#             db.session.commit()
-#             create_default_categories(dev_user.id)
-#             create_default_budgets(dev_user.id)
-#             print("Development user created:", DEV_USER_EMAIL)
-
-# --------------------
-# BUSINESS LOGIC FUNCTIONS
-# --------------------
+    return db.session.query(User).filter_by(id=id).first()
 
 
 # enhance transfer detection
@@ -202,7 +168,9 @@ def calculate_asset_debt_trends(current_user):
     twelve_months_ago = today - timedelta(days=365)
 
     # Get all accounts for the user
-    accounts = Account.query.filter_by(user_id=current_user.id).all()
+    accounts = (
+        db.session.query(Account).filter_by(user_id=current_user.id).all()
+    )
 
     # Get user's preferred currency code
     user_currency_code = current_user.default_currency_code or "USD"
@@ -251,7 +219,8 @@ def calculate_asset_debt_trends(current_user):
 
         # Get monthly transactions for this account
         transactions = (
-            Expense.query.filter(
+            db.session.query(Expense)
+            .filter(
                 Expense.account_id == account.id,
                 Expense.user_id == current_user.id,
                 Expense.date >= twelve_months_ago,
@@ -453,7 +422,7 @@ def update_category_mappings(transaction_id, category_id, learn=False):
 
     If learn=True, create a new mapping based on this categorization
     """
-    transaction = Expense.query.get(transaction_id)
+    transaction = db.session.query(Expense).get(transaction_id)
     if not transaction or not category_id:
         return False
 
@@ -462,9 +431,13 @@ def update_category_mappings(transaction_id, category_id, learn=False):
         keyword = extract_keywords(transaction.description)
 
         # Check if a similar mapping already exists
-        existing = CategoryMapping.query.filter_by(
-            user_id=transaction.user_id, keyword=keyword, active=True
-        ).first()
+        existing = (
+            db.session.query(CategoryMapping)
+            .filter_by(
+                user_id=transaction.user_id, keyword=keyword, active=True
+            )
+            .first()
+        )
 
         if existing:
             # Update the existing mapping
@@ -533,9 +506,9 @@ def extract_keywords(description):
 def create_default_category_mappings(user_id):
     """Create default category mappings for a new user."""
     # Check if user already has any mappings
-    existing_mappings_count = CategoryMapping.query.filter_by(
-        user_id=user_id
-    ).count()
+    existing_mappings_count = (
+        db.session.query(CategoryMapping).filter_by(user_id=user_id).count()
+    )
 
     # Only create defaults if user has no mappings
     if existing_mappings_count > 0:
@@ -556,9 +529,11 @@ def create_default_category_mappings(user_id):
         "Personal",
         "Other",
     ]:
-        category = Category.query.filter_by(
-            user_id=user_id, name=category_name, parent_id=None
-        ).first()
+        category = (
+            db.session.query(Category)
+            .filter_by(user_id=user_id, name=category_name, parent_id=None)
+            .first()
+        )
 
         if category:
             categories[category_name.lower()] = category.id
@@ -758,7 +733,9 @@ def update_currency_rates() -> int:
     """
     try:
         # Get the base currency
-        base_currency = Currency.query.filter_by(is_base=True).first()
+        base_currency = (
+            db.session.query(Currency).filter_by(is_base=True).first()
+        )
         if not base_currency:
             app.logger.error("No base currency found. Cannot update rates.")
             return -1
@@ -771,7 +748,7 @@ def update_currency_rates() -> int:
             f"https://api.frankfurter.app/latest?from={base_code}", timeout=10
         )
 
-        if response.status_code != 200:
+        if response.status_code != 200:  # noqa: PLR2004
             app.logger.error(
                 "API request failed with status code %s", response.status_code
             )
@@ -781,7 +758,9 @@ def update_currency_rates() -> int:
         rates = data.get("rates", {})
 
         # Get all currencies except base
-        currencies = Currency.query.filter(Currency.code != base_code).all()
+        currencies = (
+            db.session.query(Currency).filter(Currency.code != base_code).all()
+        )
         updated_count = 0
 
         # Update rates
@@ -810,14 +789,14 @@ def convert_currency(amount: float, from_code: str, to_code: str) -> float:
     if from_code == to_code:
         return amount
 
-    from_currency = Currency.query.filter_by(code=from_code).first()
-    to_currency = Currency.query.filter_by(code=to_code).first()
+    from_currency = db.session.query(Currency).filter_by(code=from_code).first()
+    to_currency = db.session.query(Currency).filter_by(code=to_code).first()
 
     if not from_currency or not to_currency:
         return amount  # Return original if either currency not found
 
     # Get base currency for reference
-    base_currency = Currency.query.filter_by(is_base=True).first()
+    base_currency = db.session.query(Currency).filter_by(is_base=True).first()
     if not base_currency:
         return amount  # Cannot convert without a base currency
 
@@ -846,7 +825,9 @@ def create_scheduled_expenses():
     today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
 
     # Find active recurring expenses
-    active_recurring = RecurringExpense.query.filter_by(active=True).all()
+    active_recurring = (
+        db.session.query(RecurringExpense).filter_by(active=True).all()
+    )
 
     for recurring in active_recurring:
         # Skip if end date is set and passed
@@ -926,7 +907,7 @@ def calculate_iou_data(expenses, users):
         # If current user is in the splits (but not the payer)
         elif current_user.id in [split["email"] for split in splits["splits"]]:
             payer_id = expense.paid_by
-            payer = User.query.filter_by(id=payer_id).first()
+            payer = db.session.query(User).filter_by(id=payer_id).first()
 
             # Find current user's split amount
             current_user_split = next(
@@ -955,9 +936,16 @@ def calculate_balances(user_id):
     balances = {}
 
     # Step 1: Calculate balances from expenses
-    expenses = Expense.query.filter(
-        or_(Expense.paid_by == user_id, Expense.split_with.like(f"%{user_id}%"))
-    ).all()
+    expenses = (
+        db.session.query(Expense)
+        .filter(
+            or_(
+                Expense.paid_by == user_id,
+                Expense.split_with.like(f"%{user_id}%"),
+            )
+        )
+        .all()
+    )
 
     for expense in expenses:
         splits = expense.calculate_splits()
@@ -969,9 +957,11 @@ def calculate_balances(user_id):
                 other_user_id = split["email"]
                 if other_user_id != user_id:
                     if other_user_id not in balances:
-                        other_user = User.query.filter_by(
-                            id=other_user_id
-                        ).first()
+                        other_user = (
+                            db.session.query(User)
+                            .filter_by(id=other_user_id)
+                            .first()
+                        )
                         balances[other_user_id] = {
                             "user_id": other_user_id,
                             "name": other_user.name
@@ -996,7 +986,9 @@ def calculate_balances(user_id):
 
             if current_user_portion > 0:
                 if payer_id not in balances:
-                    payer = User.query.filter_by(id=payer_id).first()
+                    payer = (
+                        db.session.query(User).filter_by(id=payer_id).first()
+                    )
                     balances[payer_id] = {
                         "user_id": payer_id,
                         "name": payer.name if payer else "Unknown",
@@ -1006,16 +998,25 @@ def calculate_balances(user_id):
                 balances[payer_id]["amount"] -= current_user_portion
 
     # Step 2: Adjust balances based on settlements
-    settlements = Settlement.query.filter(
-        or_(Settlement.payer_id == user_id, Settlement.receiver_id == user_id)
-    ).all()
+    settlements = (
+        db.session.query(Settlement)
+        .filter(
+            or_(
+                Settlement.payer_id == user_id,
+                Settlement.receiver_id == user_id,
+            )
+        )
+        .all()
+    )
 
     for settlement in settlements:
         if settlement.payer_id == user_id:
             # Current user paid money to someone else
             other_user_id = settlement.receiver_id
             if other_user_id not in balances:
-                other_user = User.query.filter_by(id=other_user_id).first()
+                other_user = (
+                    db.session.query(User).filter_by(id=other_user_id).first()
+                )
                 balances[other_user_id] = {
                     "user_id": other_user_id,
                     "name": other_user.name if other_user else "Unknown",
@@ -1031,7 +1032,9 @@ def calculate_balances(user_id):
             # Current user received money from someone else
             other_user_id = settlement.payer_id
             if other_user_id not in balances:
-                other_user = User.query.filter_by(id=other_user_id).first()
+                other_user = (
+                    db.session.query(User).filter_by(id=other_user_id).first()
+                )
                 balances[other_user_id] = {
                     "user_id": other_user_id,
                     "name": other_user.name if other_user else "Unknown",
@@ -1065,7 +1068,7 @@ def get_base_currency():
             "name": current_user.default_currency.name,
         }
     # Fall back to system base currency if user has no preference
-    base_currency = Currency.query.filter_by(is_base=True).first()
+    base_currency = db.session.query(Currency).filter_by(is_base=True).first()
     if not base_currency:
         # Default to USD if no base currency is set
         return {"code": "USD", "symbol": "$", "name": "US Dollar"}
@@ -1108,7 +1111,7 @@ def utility_processor():
 
         Returns None if user not found to prevent template errors
         """
-        return User.query.filter_by(id=user_id).first()
+        return db.session.query(User).filter_by(id=user_id).first()
 
     def get_category_icon_html(category):
         """Generate HTML for a category icon with proper styling."""
@@ -1124,7 +1127,8 @@ def utility_processor():
         """Return categories in a hierarchical structure for dropdowns."""
         # Get top-level categories
         top_categories = (
-            Category.query.filter_by(user_id=current_user.id, parent_id=None)
+            db.session.query(Category)
+            .filter_by(user_id=current_user.id, parent_id=None)
             .order_by(Category.name)
             .all()
         )
@@ -1162,9 +1166,13 @@ def utility_processor():
             return None
 
         # Find active budget for this category
-        budget = Budget.query.filter_by(
-            user_id=current_user.id, category_id=category_id, active=True
-        ).first()
+        budget = (
+            db.session.query(Budget)
+            .filter_by(
+                user_id=current_user.id, category_id=category_id, active=True
+            )
+            .first()
+        )
 
         if not budget:
             return None
@@ -1180,7 +1188,7 @@ def utility_processor():
 
     def get_account_by_id(account_id):
         """Retrieve an account by its ID."""
-        return Account.query.get(account_id)
+        return db.session.query(Account).get(account_id)
 
     # Return a single dictionary containing all functions
     return {
@@ -1204,9 +1212,13 @@ def utility_processor():
             return None
 
         # Find active budget for this category
-        budget = Budget.query.filter_by(
-            user_id=current_user.id, category_id=category_id, active=True
-        ).first()
+        budget = (
+            db.session.query(Budget)
+            .filter_by(
+                user_id=current_user.id, category_id=category_id, active=True
+            )
+            .first()
+        )
 
         if not budget:
             return None
@@ -1282,7 +1294,8 @@ def handle_comparison_request():
         Expense.date <= primary_end_date,
     ]
     primary_expenses_raw = (
-        Expense.query.filter(and_(*primary_query_filters))
+        db.session.query(Expense)
+        .filter(and_(*primary_query_filters))
         .order_by(Expense.date)
         .all()
     )
@@ -1296,7 +1309,8 @@ def handle_comparison_request():
         Expense.date <= comparison_end_date,
     ]
     comparison_expenses_raw = (
-        Expense.query.filter(and_(*comparison_query_filters))
+        db.session.query(Expense)
+        .filter(and_(*comparison_query_filters))
         .order_by(Expense.date)
         .all()
     )
@@ -1451,7 +1465,7 @@ def handle_comparison_request():
         # For primary period
         for expense in primary_expenses:
             # Get tags for this expense - adapt to your model
-            expense_obj = Expense.query.get(expense["id"])
+            expense_obj = db.session.query(Expense).get(expense["id"])
             if expense_obj and hasattr(expense_obj, "tags"):
                 for tag in expense_obj.tags:
                     if tag.name not in primary_tags:
@@ -1460,7 +1474,7 @@ def handle_comparison_request():
 
         # For comparison period
         for expense in comparison_expenses:
-            expense_obj = Expense.query.get(expense["id"])
+            expense_obj = db.session.query(Expense).get(expense["id"])
             if expense_obj and hasattr(expense_obj, "tags"):
                 for tag in expense_obj.tags:
                     if tag.name not in comparison_tags:
@@ -1492,7 +1506,7 @@ def handle_comparison_request():
         for expense in primary_expenses:
             if expense["paid_by"] == current_user.id:
                 # Get the payment method (assuming it's stored as card_used)
-                expense_obj = Expense.query.get(expense["id"])
+                expense_obj = db.session.query(Expense).get(expense["id"])
                 if expense_obj and hasattr(expense_obj, "card_used"):
                     card = expense_obj.card_used
                     if card not in primary_payment:
@@ -1502,7 +1516,7 @@ def handle_comparison_request():
         # For comparison period
         for expense in comparison_expenses:
             if expense["paid_by"] == current_user.id:
-                expense_obj = Expense.query.get(expense["id"])
+                expense_obj = db.session.query(Expense).get(expense["id"])
                 if expense_obj and hasattr(expense_obj, "card_used"):
                     card = expense_obj.card_used
                     if card not in comparison_payment:

@@ -33,16 +33,14 @@ class Account(Base):
         nullable=False,
     )
 
-    currency_code: Mapped[Optional[str]] = mapped_column(
+    currency_code: Mapped[str | None] = mapped_column(
         String(3),
         ForeignKey("currencies.code", name="fk_account_currency"),
         default=None,
     )
 
-    last_sync: Mapped[Optional[datetime]] = mapped_column(default=None)
-    import_source: Mapped[Optional[str]] = mapped_column(
-        String(50), default=None
-    )
+    last_sync: Mapped[datetime | None] = mapped_column(default=None)
+    import_source: Mapped[str | None] = mapped_column(String(50), default=None)
     # Relationships
     user: Mapped["User"] = relationship(
         "User", back_populates="accounts", lazy=True, init=False
@@ -52,10 +50,10 @@ class Account(Base):
         "Currency", back_populates="accounts", lazy=True, init=False
     )
 
-    external_id: Mapped[Optional[str]] = mapped_column(
+    external_id: Mapped[str | None] = mapped_column(
         String(200), nullable=True, default=None
     )
-    status: Mapped[Optional[str]] = mapped_column(
+    status: Mapped[str | None] = mapped_column(
         String(20), nullable=True, default=None
     )  # Add this line too for 'active'/'inactive' status
 

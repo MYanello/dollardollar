@@ -1,5 +1,4 @@
-from datetime import datetime
-from datetime import timezone as tz
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, ClassVar, Optional, cast
 
 from sqlalchemy import ForeignKey, String, Text
@@ -9,7 +8,6 @@ from sqlalchemy.orm import (
     relationship,
 )
 
-from database import db
 from tables import expense_tags
 
 from .base import Base
@@ -50,36 +48,36 @@ class Expense(Base):
         String(20), server_default="expense"
     )  # 'expense', 'income', 'transfer'
 
-    split_value: Mapped[Optional[float]] = mapped_column(
+    split_value: Mapped[float | None] = mapped_column(
         default=None
     )  # deprecated - kept for backward compatibility
 
-    group_id: Mapped[Optional[int]] = mapped_column(
+    group_id: Mapped[int | None] = mapped_column(
         ForeignKey("groups.id"), nullable=True, default=None
     )
-    split_with: Mapped[Optional[str]] = mapped_column(
+    split_with: Mapped[str | None] = mapped_column(
         String(500), nullable=True, default=None
     )  # Comma-separated list of user IDs
-    split_details: Mapped[Optional[str]] = mapped_column(
+    split_details: Mapped[str | None] = mapped_column(
         Text, nullable=True, default=None
     )  # JSON string storing custom split values for each user
-    recurring_id: Mapped[Optional[int]] = mapped_column(
+    recurring_id: Mapped[int | None] = mapped_column(
         ForeignKey("recurring_expenses.id"), nullable=True, default=None
     )
 
     # Add these fields to your existing Expense class:
-    currency_code: Mapped[Optional[str]] = mapped_column(
+    currency_code: Mapped[str | None] = mapped_column(
         String(3), ForeignKey("currencies.code"), nullable=True, default=None
     )
-    original_amount: Mapped[Optional[float]] = mapped_column(
+    original_amount: Mapped[float | None] = mapped_column(
         nullable=True, default=None
     )  # Amount in original currency
-    category_id: Mapped[Optional[int]] = mapped_column(
+    category_id: Mapped[int | None] = mapped_column(
         ForeignKey("categories.id"), nullable=True, default=None
     )
 
     # imports
-    account_id: Mapped[Optional[int]] = mapped_column(
+    account_id: Mapped[int | None] = mapped_column(
         ForeignKey("accounts.id", name="fk_expense_account"),
         nullable=True,
         default=None,
@@ -96,10 +94,10 @@ class Expense(Base):
     currency: Mapped[Optional["Currency"]] = relationship(
         "Currency", back_populates="expenses", lazy=True, init=False
     )
-    external_id: Mapped[Optional[str]] = mapped_column(
+    external_id: Mapped[str | None] = mapped_column(
         String(200), nullable=True, default=None
     )  # For tracking external transaction IDs
-    import_source: Mapped[Optional[str]] = mapped_column(
+    import_source: Mapped[str | None] = mapped_column(
         String(50), nullable=True, default=None
     )  # 'csv', 'simplefin', 'manual'
 
@@ -112,7 +110,7 @@ class Expense(Base):
     )
 
     # For transfers, we need a destination account
-    destination_account_id: Mapped[Optional[int]] = mapped_column(
+    destination_account_id: Mapped[int | None] = mapped_column(
         ForeignKey("accounts.id", name="fk_destination_account"),
         nullable=True,
         default=None,
@@ -129,7 +127,7 @@ class Expense(Base):
     has_category_splits: Mapped[bool] = mapped_column(default=False)
 
     date: Mapped[datetime] = mapped_column(
-        nullable=False, default=datetime.now(tz.utc)
+        nullable=False, default=datetime.now(UTC)
     )
 
     category: Mapped["Category"] = relationship(
@@ -177,12 +175,14 @@ class Expense(Base):
             self.transaction_type == "expense" or self.transaction_type is None
         )
 
-    def calculate_splits(self) -> dict[str, Any]:  # noqa: C901, PLR0912, PLR0915
+    def calculate_splits(self) -> dict[str, Any]:  # noqa: PLR0915
         """Calculate the split for each person.
 
         :return: Dictionary containing payer and split information
         :rtype: dict
         """
+        from database import db  # noqa: PLC0415
+
         # Get the user who paid
         payer: User | None = db.session.get(User, self.paid_by)
         if not payer:
@@ -238,7 +238,7 @@ class Expense(Base):
             except Exception as e:
                 # Log the error or handle it as appropriate
                 print(
-                    f"Error parsing split_details for expense {self.id}: {str(e)}"
+                    f"Error parsing split_details for expense {self.id}: {e!s}"
                 )
                 split_details = {}
 
