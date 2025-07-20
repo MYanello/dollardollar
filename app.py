@@ -1,9 +1,12 @@
+import hashlib
 import logging
 import os
 import ssl
-from datetime import datetime
+from contextlib import suppress
+from datetime import UTC, datetime, timedelta
 
 import pytz
+import requests
 from flask import (
     Flask,
     jsonify,
@@ -43,10 +46,10 @@ os.environ["OPENSSL_LEGACY_PROVIDER"] = "1"
 
 APP_VERSION = "4.2"
 
-try:
-    ssl._create_default_https_context = ssl._create_unverified_context
-except AttributeError:
-    pass
+NEAR_ZERO = 0.01
+
+with suppress(AttributeError):
+    ssl._create_default_https_context = ssl._create_unverified_context  # noqa: SLF001
 
 
 def create_app(config_object=None):
@@ -115,7 +118,7 @@ logging.basicConfig(level=getattr(logging, app.config["LOG_LEVEL"]))
 
 @scheduler.task("cron", id="monthly_reports", day=1, hour=1, minute=0)
 def scheduled_monthly_reports():
-    """Run on the 1st day of each month at 1:00 AM"""
+    """Run on the 1st day of each month at 1:00 AM."""
     send_automatic_monthly_reports()
 
 
@@ -141,7 +144,7 @@ oidc_enabled = setup_oidc_config(app)
 
 # Initialize demo timeout middleware
 demo_timeout = DemoTimeout(
-    timeout_minutes=int(os.getenv("DEMO_TIMEOUT_MINUTES", 10)),
+    timeout_minutes=int(os.getenv("DEMO_TIMEOUT_MINUTES", "10")),
     demo_users=[
         "demo@example.com",
         "demo1@example.com",
@@ -189,15 +192,13 @@ def load_user(id):
 
 # enhance transfer detection
 def calculate_asset_debt_trends(current_user):
-    """Calculate asset and debt trends for a user's accounts"""
-    from datetime import datetime, timedelta
-
+    """Calculate asset and debt trends for a user's accounts."""
     # Initialize tracking
     monthly_assets = {}
     monthly_debts = {}
 
     # Get today's date and calculate a reasonable historical range (last 12 months)
-    today = datetime.now()
+    today = datetime.now(tz=UTC)
     twelve_months_ago = today - timedelta(days=365)
 
     # Get all accounts for the user
@@ -206,7 +207,8 @@ def calculate_asset_debt_trends(current_user):
     # Get user's preferred currency code
     user_currency_code = current_user.default_currency_code or "USD"
 
-    # Calculate true total assets and debts directly from accounts (for accurate current total)
+    # Calculate true total assets and debts directly from accounts
+    # (for accurate current total)
     direct_total_assets = 0
     direct_total_debts = 0
 
@@ -244,7 +246,7 @@ def calculate_asset_debt_trends(current_user):
         is_debt = account.type in ["credit"] or account.balance < 0
 
         # Skip accounts with zero or near-zero balance
-        if abs(account.balance or 0) < 0.01:
+        if abs(account.balance or 0) < NEAR_ZERO:
             continue
 
         # Get monthly transactions for this account
@@ -284,10 +286,7 @@ def calculate_asset_debt_trends(current_user):
             # Adjust balance based on transaction
             if transaction.transaction_type == "income":
                 current_balance += transaction_amount
-            elif (
-                transaction.transaction_type == "expense"
-                or transaction.transaction_type == "transfer"
-            ):
+            elif transaction.transaction_type in {"expense", "transfer"}:
                 current_balance -= transaction_amount
 
             # Update monthly balance
@@ -306,7 +305,8 @@ def calculate_asset_debt_trends(current_user):
                 # For asset accounts, add positive balances to the monthly total
                 monthly_assets[month] = monthly_assets.get(month, 0) + balance
             elif is_debt:
-                # For debt accounts or negative balances, add the absolute value to the debt total
+                # For debt accounts or negative balances,
+                # add the absolute value to the debt total
                 monthly_debts[month] = monthly_debts.get(month, 0) + abs(
                     balance
                 )
@@ -345,7 +345,8 @@ def calculate_asset_debt_trends(current_user):
 
 # Update the determine_transaction_type function to detect internal transfers
 def determine_transaction_type(row, current_account_id=None):
-    """Determine transaction type based on row data from CSV import
+    """Determine transaction type based on row data from CSV import.
+
     Now with enhanced internal transfer detection
     """
     type_column = request.form.get("type_column")
@@ -441,14 +442,15 @@ def determine_transaction_type(row, current_account_id=None):
             return "income"
         if amount < 0 and not negative_is_expense:
             return "income"  # In some systems, negative means money coming in
-        return "expense"  # Default to expense for positive amounts
     except ValueError:
         # If amount can't be parsed, default to expense
         return "expense"
+    return "expense"  # Default to expense for positive amounts
 
 
 def update_category_mappings(transaction_id, category_id, learn=False):
-    """Update category mappings based on a manually categorized transaction
+    """Update category mappings based on a manually categorized transaction.
+
     If learn=True, create a new mapping based on this categorization
     """
     transaction = Expense.query.get(transaction_id)
@@ -486,7 +488,8 @@ def update_category_mappings(transaction_id, category_id, learn=False):
 
 
 def extract_keywords(description):
-    """Extract meaningful keywords from a transaction description
+    """Extract meaningful keywords from a transaction description.
+
     Returns the most significant word or phrase
     """
     if not description:
@@ -528,7 +531,7 @@ def extract_keywords(description):
 
 
 def create_default_category_mappings(user_id):
-    """Create default category mappings for a new user"""
+    """Create default category mappings for a new user."""
     # Check if user already has any mappings
     existing_mappings_count = CategoryMapping.query.filter_by(
         user_id=user_id
@@ -567,7 +570,9 @@ def create_default_category_mappings(user_id):
     # If we couldn't find any categories, we can't create mappings
     if not categories:
         app.logger.warning(
-            f"Could not create default category mappings for user {user_id}: no categories found"
+            "Could not create default category mappings for user %s:"
+            "no categories found",
+            user_id,
         )
         return
 
@@ -735,18 +740,21 @@ def create_default_category_mappings(user_id):
     # Commit all mappings at once
     try:
         db.session.commit()
-        app.logger.info(f"Created default category mappings for user {user_id}")
-    except Exception as e:
+        app.logger.info(
+            "Created default category mappings for user %s", user_id
+        )
+    except Exception:
         db.session.rollback()
-        app.logger.error(f"Error creating default category mappings: {e!s}")
+        app.logger.exception("Error creating default category mappings")
 
 
 # Then modify the existing create_default_categories function to also create mappings:
 
 
 def update_currency_rates() -> int:
-    """Update currency exchange rates using a public API
-    Returns the number of currencies updated or -1 on error
+    """Update currency exchange rates using a public API.
+
+    :return: the number of currencies updated or -1 on error
     """
     try:
         # Get the base currency
@@ -760,12 +768,12 @@ def update_currency_rates() -> int:
         # Use ExchangeRate-API (free tier - https://www.exchangerate-api.com/)
         # Or you can use another free API like https://frankfurter.app/
         response = requests.get(
-            f"https://api.frankfurter.app/latest?from={base_code}"
+            f"https://api.frankfurter.app/latest?from={base_code}", timeout=10
         )
 
         if response.status_code != 200:
             app.logger.error(
-                f"API request failed with status code {response.status_code}"
+                "API request failed with status code %s", response.status_code
             )
             return -1
 
@@ -782,23 +790,23 @@ def update_currency_rates() -> int:
                 currency.rate_to_base = (
                     1 / rates[currency.code]
                 )  # Convert to base currency rate
-                currency.last_updated = datetime.utcnow()
+                currency.last_updated = datetime.now(UTC)
                 updated_count += 1
             else:
-                app.logger.warning(f"No rate found for {currency.code}")
+                app.logger.warning("No rate found for %s", currency.code)
 
         # Commit changes
         db.session.commit()
-        app.logger.info(f"Updated {updated_count} currency rates")
-        return updated_count
+        app.logger.info("Updated %s currency rates", updated_count)
 
-    except Exception as e:
-        app.logger.error(f"Error updating currency rates: {e!s}")
+    except Exception:
+        app.logger.exception("Error updating currency rates")
         return -1
+    return updated_count
 
 
 def convert_currency(amount: float, from_code: str, to_code: str) -> float:
-    """Convert an amount from one currency to another"""
+    """Convert an amount from one currency to another."""
     if from_code == to_code:
         return amount
 
@@ -834,8 +842,8 @@ def convert_currency(amount: float, from_code: str, to_code: str) -> float:
 
 
 def create_scheduled_expenses():
-    """Create expense instances for active recurring expenses"""
-    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    """Create expense instances for active recurring expenses."""
+    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
 
     # Find active recurring expenses
     active_recurring = RecurringExpense.query.filter_by(active=True).all()
@@ -845,7 +853,8 @@ def create_scheduled_expenses():
         if recurring.end_date and recurring.end_date < today:
             continue
 
-        # Determine if we need to create an expense based on frequency and last created date
+        # Determine if we need to create an expense
+        # based on frequency and last created date
         create_expense = False
         last_date = recurring.last_created or recurring.start_date
 
@@ -872,10 +881,9 @@ def create_scheduled_expenses():
             ):
                 create_expense = True
 
-        elif recurring.frequency == "yearly":
+        elif recurring.frequency == "yearly" and today.year > last_date.year:
             # Create if we're in a new year from the last creation
-            if today.year > last_date.year:
-                create_expense = True
+            create_expense = True
 
         # Create the expense if needed
         if create_expense:
@@ -888,7 +896,7 @@ def create_scheduled_expenses():
 
 
 def calculate_iou_data(expenses, users):
-    """Calculate who owes whom money based on expenses"""
+    """Calculate who owes whom money based on expenses."""
     # Initialize data structure
     iou_data = {
         "owes_me": {},  # People who owe current user
@@ -943,7 +951,7 @@ def calculate_iou_data(expenses, users):
 
 
 def calculate_balances(user_id):
-    """Calculate balances between the current user and all other users"""
+    """Calculate balances between the current user and all other users."""
     balances = {}
 
     # Step 1: Calculate balances from expenses
@@ -1014,7 +1022,8 @@ def calculate_balances(user_id):
                     "email": other_user_id,
                     "amount": 0,
                 }
-            # FIX: When current user pays someone, it INCREASES how much they owe the current user
+            # FIX: When current user pays someone,
+            # it INCREASES how much they owe the current user
             # Change from -= to +=
             balances[other_user_id]["amount"] += settlement.amount
 
@@ -1029,7 +1038,8 @@ def calculate_balances(user_id):
                     "email": other_user_id,
                     "amount": 0,
                 }
-            # FIX: When current user receives money, it DECREASES how much they're owed
+            # FIX: When current user receives money,
+            # it DECREASES how much they're owed
             # Change from += to -=
             balances[other_user_id]["amount"] -= settlement.amount
 
@@ -1037,12 +1047,12 @@ def calculate_balances(user_id):
     return [
         balance
         for balance in balances.values()
-        if abs(balance["amount"]) > 0.01
+        if abs(balance["amount"]) > NEAR_ZERO
     ]
 
 
 def get_base_currency():
-    """Get the current user's default currency or fall back to base currency if not set"""
+    """Get the current user's default currency or fall back to base currency."""
     if (
         current_user.is_authenticated
         and current_user.default_currency_code
@@ -1069,13 +1079,12 @@ def get_base_currency():
 @app.context_processor
 def utility_processor():
     def get_user_color(user_id):
-        """Generate a consistent color for a user based on their ID
+        """Generate a consistent color for a user based on their ID.
+
         This ensures the same user always gets the same color
         """
-        import hashlib
-
         # Use MD5 hash to generate a consistent color
-        hash_object = hashlib.md5(user_id.encode())
+        hash_object = hashlib.md5(user_id.encode())  # noqa: S324
         hash_hex = hash_object.hexdigest()
 
         # Use the first 6 characters of the hash to create a color
@@ -1086,7 +1095,7 @@ def utility_processor():
 
         # Ensure the color is not too light
         brightness = (r * 299 + g * 587 + b * 114) / 1000
-        if brightness > 180:
+        if brightness > 180:  # noqa: PLR2004
             # If too bright, darken the color
             r = min(r * 0.7, 255)
             g = min(g * 0.7, 255)
@@ -1095,13 +1104,14 @@ def utility_processor():
         return f"rgb({r},{g},{b})"
 
     def get_user_by_id(user_id):
-        """Retrieve a user by their ID
+        """Retrieve a user by their ID.
+
         Returns None if user not found to prevent template errors
         """
         return User.query.filter_by(id=user_id).first()
 
     def get_category_icon_html(category):
-        """Generate HTML for a category icon with proper styling"""
+        """Generate HTML for a category icon with proper styling."""
         if not category:
             return '<i class="fas fa-tag"></i>'
 
@@ -1111,7 +1121,7 @@ def utility_processor():
         return f'<i class="fas {icon}" style="color: {color};"></i>'
 
     def get_categories_as_tree():
-        """Return categories in a hierarchical structure for dropdowns"""
+        """Return categories in a hierarchical structure for dropdowns."""
         # Get top-level categories
         top_categories = (
             Category.query.filter_by(user_id=current_user.id, parent_id=None)
@@ -1147,7 +1157,7 @@ def utility_processor():
         return result
 
     def get_budget_status_for_category(category_id):
-        """Get budget status for a specific category"""
+        """Get budget status for a specific category."""
         if not current_user.is_authenticated:
             return None
 
@@ -1169,7 +1179,7 @@ def utility_processor():
         }
 
     def get_account_by_id(account_id):
-        """Retrieve an account by its ID"""
+        """Retrieve an account by its ID."""
         return Account.query.get(account_id)
 
     # Return a single dictionary containing all functions
@@ -1189,7 +1199,7 @@ def utility_processor():
     # Previous utility functions...
 
     def get_budget_status_for_category(category_id):
-        """Get budget status for a specific category"""
+        """Get budget status for a specific category."""
         if not current_user.is_authenticated:
             return None
 
@@ -1211,7 +1221,7 @@ def utility_processor():
         }
 
     def template_convert_currency(amount, from_code, to_code):
-        """Make convert_currency available to templates"""
+        """Make convert_currency available to templates."""
         return convert_currency(amount, from_code, to_code)
 
     return {
@@ -1223,12 +1233,12 @@ def utility_processor():
 
 @app.context_processor
 def inject_app_version():
-    """Make app version available to all templates"""
+    """Make app version available to all templates."""
     return {"app_version": APP_VERSION}
 
 
 def handle_comparison_request():
-    """Handle time frame comparison requests within the stats route"""
+    """Handle time frame comparison requests within the stats route."""
     # Get parameters from request
     primary_start = request.args.get("primaryStart")
     primary_end = request.args.get("primaryEnd")
@@ -1376,10 +1386,10 @@ def handle_comparison_request():
 
         # Debugging - log the daily spending data
         app.logger.info(
-            f"Primary daily amounts: {result['primary']['dailyAmounts']}"
+            "Primary daily amounts: %s", result["primary"]["dailyAmounts"]
         )
         app.logger.info(
-            f"Comparison daily amounts: {result['comparison']['dailyAmounts']}"
+            "Comparison daily amounts: %s", result["comparison"]["dailyAmounts"]
         )
 
     elif metric == "categories":
@@ -1518,7 +1528,7 @@ def handle_comparison_request():
 # Context processor for timezone-aware datetime formatting
 @app.context_processor
 def timezone_processor():
-    def format_datetime(dt, format="medium"):
+    def format_datetime(dt, fmt="medium"):
         """Format datetime in user's local timezone."""
         if not dt:
             return ""

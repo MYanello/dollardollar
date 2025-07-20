@@ -6,6 +6,8 @@ load_dotenv()
 
 
 class Config:
+    """Set up the basic environment config for the app."""
+
     SECRET_KEY = os.getenv(
         "SECRET_KEY", "fallback_secret_key_change_in_production"
     )
@@ -31,7 +33,7 @@ class Config:
 
     # Email settings
     MAIL_SERVER = os.getenv("MAIL_SERVER", "smtp.gmail.com")
-    MAIL_PORT = int(os.getenv("MAIL_PORT", 587))
+    MAIL_PORT = int(os.getenv("MAIL_PORT", "587"))
     MAIL_USE_TLS = os.getenv("MAIL_USE_TLS", "True").lower() == "true"
     MAIL_USE_SSL = os.getenv("MAIL_USE_SSL", "False").lower() == "true"
     MAIL_USERNAME = os.getenv("MAIL_USERNAME")
@@ -56,21 +58,21 @@ class Config:
 
 
 class DevelopmentConfig(Config):
-    """Development environment configuration"""
+    """Development environment configuration."""
 
     DEBUG = True
     DEVELOPMENT_MODE = True
 
 
 class ProductionConfig(Config):
-    """Production environment configuration"""
+    """Production environment configuration."""
 
     DEBUG = False
     DEVELOPMENT_MODE = False
 
 
 class TestingConfig(Config):
-    """Testing environment configuration"""
+    """Testing environment configuration."""
 
     TESTING = True
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
