@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-    <!-- dev-signature: 29a41de6a866d56c36aba5159f45257c -->
+<!-- dev-signature: 29a41de6a866d56c36aba5159f45257c -->
 {% block content %}
 <div class="container">
     <div class="row mb-4">
@@ -14,58 +14,88 @@
         <div class="col-md-6">
             <div class="card">
                 <div class="card-header bg-danger text-white">
-                    <h5 class="mb-0"><i class="fas fa-arrow-circle-right me-2"></i>You Owe</h5>
+                    <h5 class="mb-0">
+                        <i class="fas fa-arrow-circle-right me-2"></i>You Owe
+                    </h5>
                 </div>
                 <div class="card-body">
                     {% if you_owe %}
-                        <div class="list-group">
-                            {% for balance in you_owe %}
-                            <div class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center">
-                                <div>
-                                    <span class="badge bg-secondary me-2">{{ balance.name }}</span>
-                                    <small class="text-muted">({{ balance.email }})</small>
-                                </div>
-                                <div class="d-flex align-items-center">
-                                    <span class="badge bg-danger me-2">{{ base_currency.symbol }}{{ "%.2f"|format(balance.amount) }}</span>
-                                    <button class="btn btn-success btn-sm" onclick="prepareSettlement('{{ balance.id }}', '{{ balance.name }}', {{ balance.amount }}, true)">
-                                        <i class="fas fa-money-bill-wave me-1"></i>Pay
-                                    </button>
-                                </div>
+                    <div class="list-group">
+                        {% for balance in you_owe %}
+                        <div
+                            class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center"
+                        >
+                            <div>
+                                <span class="badge bg-secondary me-2"
+                                    >{{ balance.name }}</span
+                                >
+                                <small class="text-muted"
+                                    >({{ balance.email }})</small
+                                >
                             </div>
-                            {% endfor %}
+                            <div class="d-flex align-items-center">
+                                <span class="badge bg-danger me-2"
+                                    >{{ base_currency.symbol }}{{
+                                    "%.2f"|format(balance.amount) }}</span
+                                >
+                                <button
+                                    class="btn btn-success btn-sm"
+                                    onclick="prepareSettlement('{{ balance.id }}', '{{ balance.name }}', {{ balance.amount }}, true)"
+                                >
+                                    <i class="fas fa-money-bill-wave me-1"></i
+                                    >Pay
+                                </button>
+                            </div>
                         </div>
+                        {% endfor %}
+                    </div>
                     {% else %}
-                        <p class="text-muted">You don't owe anyone money</p>
+                    <p class="text-muted">You don't owe anyone money</p>
                     {% endif %}
                 </div>
             </div>
         </div>
-        
+
         <div class="col-md-6">
             <div class="card">
                 <div class="card-header bg-success text-white">
-                    <h5 class="mb-0"><i class="fas fa-arrow-circle-left me-2"></i>You Are Owed</h5>
+                    <h5 class="mb-0">
+                        <i class="fas fa-arrow-circle-left me-2"></i>You Are
+                        Owed
+                    </h5>
                 </div>
                 <div class="card-body">
                     {% if you_are_owed %}
-                        <div class="list-group">
-                            {% for balance in you_are_owed %}
-                            <div class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center">
-                                <div>
-                                    <span class="badge bg-secondary me-2">{{ balance.name }}</span>
-                                    <small class="text-muted">({{ balance.email }})</small>
-                                </div>
-                                <div class="d-flex align-items-center">
-                                    <span class="badge bg-success me-2">{{ base_currency.symbol }}{{ "%.2f"|format(balance.amount) }}</span>
-                                    <button class="btn btn-secondary btn-sm" onclick="prepareSettlement('{{ balance.id }}', '{{ balance.name }}', {{ balance.amount }}, false)">
-                                        <i class="fas fa-check me-1"></i>Record
-                                    </button>
-                                </div>
+                    <div class="list-group">
+                        {% for balance in you_are_owed %}
+                        <div
+                            class="list-group-item bg-dark border-secondary d-flex justify-content-between align-items-center"
+                        >
+                            <div>
+                                <span class="badge bg-secondary me-2"
+                                    >{{ balance.name }}</span
+                                >
+                                <small class="text-muted"
+                                    >({{ balance.email }})</small
+                                >
                             </div>
-                            {% endfor %}
+                            <div class="d-flex align-items-center">
+                                <span class="badge bg-success me-2"
+                                    >{{ base_currency.symbol }}{{
+                                    "%.2f"|format(balance.amount) }}</span
+                                >
+                                <button
+                                    class="btn btn-secondary btn-sm"
+                                    onclick="prepareSettlement('{{ balance.id }}', '{{ balance.name }}', {{ balance.amount }}, false)"
+                                >
+                                    <i class="fas fa-check me-1"></i>Record
+                                </button>
+                            </div>
                         </div>
+                        {% endfor %}
+                    </div>
                     {% else %}
-                        <p class="text-muted">Nobody owes you money</p>
+                    <p class="text-muted">Nobody owes you money</p>
                     {% endif %}
                 </div>
             </div>
@@ -78,43 +108,89 @@
             <h5 class="mb-0">Record a Settlement</h5>
         </div>
         <div class="card-body">
-            <form method="POST" action="{{ url_for('add_settlement') }}">
+            <form
+                method="POST"
+                action="{{ url_for('settlement.add_settlement') }}"
+            >
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label for="payer_id" class="form-label">Who Paid</label>
-                        <select class="form-select bg-dark text-light" id="payer_id" name="payer_id" required>
+                        <label for="payer_id" class="form-label"
+                            >Who Paid</label
+                        >
+                        <select
+                            class="form-select bg-dark text-light"
+                            id="payer_id"
+                            name="payer_id"
+                            required
+                        >
                             <option value="">Select person who paid</option>
                             {% for user in users %}
-                                <option value="{{ user.id }}">{{ user.name }} ({{ user.id }})</option>
+                            <option value="{{ user.id }}">
+                                {{ user.name }} ({{ user.id }})
+                            </option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="col-md-6 mb-3">
-                        <label for="receiver_id" class="form-label">Who Received</label>
-                        <select class="form-select bg-dark text-light" id="receiver_id" name="receiver_id" required>
+                        <label for="receiver_id" class="form-label"
+                            >Who Received</label
+                        >
+                        <select
+                            class="form-select bg-dark text-light"
+                            id="receiver_id"
+                            name="receiver_id"
+                            required
+                        >
                             <option value="">Select person who received</option>
                             {% for user in users %}
-                                <option value="{{ user.id }}">{{ user.name }} ({{ user.id }})</option>
+                            <option value="{{ user.id }}">
+                                {{ user.name }} ({{ user.id }})
+                            </option>
                             {% endfor %}
                         </select>
                     </div>
                 </div>
                 <div class="row">
                     <div class="col-md-4 mb-3">
-                        <label for="amount" class="form-label">Amount ({{ base_currency.symbol }})</label>
-                        <input type="number" step="0.01" class="form-control bg-dark text-light" id="amount" name="amount" required>
+                        <label for="amount" class="form-label"
+                            >Amount ({{ base_currency.symbol }})</label
+                        >
+                        <input
+                            type="number"
+                            step="0.01"
+                            class="form-control bg-dark text-light"
+                            id="amount"
+                            name="amount"
+                            required
+                        />
                     </div>
                     <div class="col-md-4 mb-3">
                         <label for="date" class="form-label">Date</label>
-                        <input type="date" class="form-control bg-dark text-light" id="date" name="date" required>
+                        <input
+                            type="date"
+                            class="form-control bg-dark text-light"
+                            id="date"
+                            name="date"
+                            required
+                        />
                     </div>
                     <div class="col-md-4 mb-3">
-                        <label for="description" class="form-label">Description (Optional)</label>
-                        <input type="text" class="form-control bg-dark text-light" id="description" name="description" placeholder="e.g., Venmo payment">
+                        <label for="description" class="form-label"
+                            >Description (Optional)</label
+                        >
+                        <input
+                            type="text"
+                            class="form-control bg-dark text-light"
+                            id="description"
+                            name="description"
+                            placeholder="e.g., Venmo payment"
+                        />
                     </div>
                 </div>
                 <div class="d-flex justify-content-end">
-                    <button type="submit" class="btn btn-primary">Record Settlement</button>
+                    <button type="submit" class="btn btn-primary">
+                        Record Settlement
+                    </button>
                 </div>
             </form>
         </div>
@@ -138,32 +214,34 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% if settlements %}
-                            {% for settlement in settlements %}
-                            <tr>
-                                <td>{{ settlement.date.strftime('%Y-%m-%d') }}</td>
-                                <td>{{ settlement.description }}</td>
-                                <td>
-                                    {% if settlement.payer_id == current_user_id %}
-                                        <span class="badge bg-primary">You</span>
-                                    {% else %}
-                                        {{ settlement.payer.name }}
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if settlement.receiver_id == current_user_id %}
-                                        <span class="badge bg-primary">You</span>
-                                    {% else %}
-                                        {{ settlement.receiver.name }}
-                                    {% endif %}
-                                </td>
-                                <td>{{ base_currency.symbol }}{{ "%.2f"|format(settlement.amount) }}</td>
-                            </tr>
-                            {% endfor %}
-                        {% else %}
-                            <tr>
-                                <td colspan="5" class="text-center">No settlements yet</td>
-                            </tr>
+                        {% if settlements %} {% for settlement in settlements %}
+                        <tr>
+                            <td>{{ settlement.date.strftime('%Y-%m-%d') }}</td>
+                            <td>{{ settlement.description }}</td>
+                            <td>
+                                {% if settlement.payer_id == current_user_id %}
+                                <span class="badge bg-primary">You</span>
+                                {% else %} {{ settlement.payer.name }} {% endif
+                                %}
+                            </td>
+                            <td>
+                                {% if settlement.receiver_id == current_user_id
+                                %}
+                                <span class="badge bg-primary">You</span>
+                                {% else %} {{ settlement.receiver.name }} {%
+                                endif %}
+                            </td>
+                            <td>
+                                {{ base_currency.symbol }}{{
+                                "%.2f"|format(settlement.amount) }}
+                            </td>
+                        </tr>
+                        {% endfor %} {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center">
+                                No settlements yet
+                            </td>
+                        </tr>
                         {% endif %}
                     </tbody>
                 </table>
@@ -171,36 +249,38 @@
         </div>
     </div>
 </div>
-{% endblock %}
-
-{% block scripts %}
+{% endblock %} {% block scripts %}
 <script>
-    const baseCurrencySymbol = "{{ base_currency.symbol }}";   
-    document.addEventListener('DOMContentLoaded', function() {
+    const baseCurrencySymbol = "{{ base_currency.symbol }}";
+    document.addEventListener("DOMContentLoaded", function () {
         // Initialize today's date
-        const today = new Date().toISOString().split('T')[0];
-        document.getElementById('date').value = today;
+        const today = new Date().toISOString().split("T")[0];
+        document.getElementById("date").value = today;
     });
-    
+
     function prepareSettlement(userId, userName, amount, youArePaying) {
         // Pre-fill the settlement form
         if (youArePaying) {
             // You are paying them
-            document.getElementById('payer_id').value = '{{ current_user_id }}';
-            document.getElementById('receiver_id').value = userId;
+            document.getElementById("payer_id").value = "{{ current_user_id }}";
+            document.getElementById("receiver_id").value = userId;
         } else {
             // They are paying you
-            document.getElementById('payer_id').value = userId;
-            document.getElementById('receiver_id').value = '{{ current_user_id }}';
+            document.getElementById("payer_id").value = userId;
+            document.getElementById("receiver_id").value =
+                "{{ current_user_id }}";
         }
-        
-        document.getElementById('amount').value = amount.toFixed(2);
-        document.getElementById('description').value = 'Settlement with ' + userName;
-        
+
+        document.getElementById("amount").value = amount.toFixed(2);
+        document.getElementById("description").value =
+            "Settlement with " + userName;
+
         // Scroll to the form
-        document.querySelector('.card-header:contains("Record a Settlement")').scrollIntoView({ 
-            behavior: 'smooth' 
-        });
+        document
+            .querySelector('.card-header:contains("Record a Settlement")')
+            .scrollIntoView({
+                behavior: "smooth",
+            });
     }
 </script>
 {% endblock %}
