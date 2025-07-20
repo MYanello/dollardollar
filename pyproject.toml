@@ -1,6 +1,7 @@
 [project]
 name = "dollardollar"
 version = "0.1.0"
+requires-python = ">3.11"
 readme = "README.md"
 dependencies = [
     "alembic>=1.7.5",
@@ -22,13 +23,11 @@ dependencies = [
     "requests-oauthlib==1.3.1",
     "ruff>=0.11.6",
     "scrypt>=0.8.27",
-    "sqlalchemy==2.0.40",
     "tzdata>=2021.1",
     "werkzeug==3.1.3",
 ]
 
 [tool.ruff]
-extend-exclude = ["app.py"]
 line-length = 80
 
 [tool.ruff.lint]
