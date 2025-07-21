@@ -1,6 +1,5 @@
 import contextlib
-from datetime import datetime, timedelta
-from datetime import timezone as tz
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from flask import (
@@ -15,7 +14,6 @@ from flask import (
     url_for,
 )
 from flask_login import current_user
-from sqlalchemy.orm.query import Query
 from werkzeug import Response
 
 from database import db
@@ -32,8 +30,6 @@ budget_bp = Blueprint("budget", __name__)
 @demo_time_limited
 def budgets() -> str:
     """View and manage budgets."""
-    from datetime import datetime
-
     # Get all budgets for the current user
     user_budgets: list[Budget] = (
         db.session.query(Budget)
@@ -86,7 +82,7 @@ def budgets() -> str:
     base_currency = get_base_currency()
 
     # Pass the current date to the template
-    now: datetime = datetime.now()
+    now: datetime = datetime.now(UTC)
 
     return render_template(
         "budgets.html",
@@ -128,10 +124,10 @@ def add_budget() -> Response:
             start_date: datetime = (
                 datetime.strptime(start_date_str, "%Y-%m-%d")
                 if start_date_str
-                else datetime.now(tz.utc)
+                else datetime.now(UTC)
             )
         except ValueError:
-            start_date = datetime.now(tz.utc)
+            start_date = datetime.now(UTC)
 
         # Check if a budget already exists for this category
         existing_budget: Budget | None = (
@@ -216,7 +212,7 @@ def edit_budget(budget_id) -> Response:
                 )
 
         budget.is_recurring = request.form.get("is_recurring") == "on"
-        budget.updated_at = datetime.now(tz.utc)
+        budget.updated_at = datetime.now(UTC)
 
         db.session.commit()
         flash("Budget updated successfully!")
@@ -537,7 +533,7 @@ def get_subcategory_spending(budget_id) -> tuple[Response, int]:
 
 @budget_bp.route("/trends-data")
 @login_required_dev
-def budget_trends_data() -> tuple[Response, int]:  # noqa: C901, PLR0912, PLR0915
+def budget_trends_data() -> tuple[Response, int]:  # noqa: PLR0915
     """Get budget trends data for chart visualization with proper split handling."""
     budget_id: str | None = request.args.get("budget_id")
 
@@ -1083,7 +1079,7 @@ def budget_trends_data() -> tuple[Response, int]:  # noqa: C901, PLR0912, PLR091
 @budget_bp.route("/transactions/<int:budget_id>")
 @login_required_dev
 @demo_time_limited
-def budget_transactions(budget_id) -> tuple[Response, int]:  # noqa: C901, PLR0912, PLR0915
+def budget_transactions(budget_id) -> tuple[Response, int]:  # noqa: PLR0915
     """Get transactions related to a specific budget with proper split handling."""
     # Get the budget
     budget: Budget | None = (

@@ -1,10 +1,11 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from flask import Blueprint, render_template, request
 from flask import current_app as app
 from flask_login import current_user
 from sqlalchemy import and_, or_
 
+from database import db
 from models import Account, Category, Expense, Group, Settlement
 from services.helpers import calculate_balances, get_base_currency
 from services.wrappers import login_required_dev
@@ -25,8 +26,8 @@ def stats():
     chart_type = request.args.get("chartType", "all")
     is_comparison = request.args.get("compare", "false") == "true"
 
-    if is_comparison:
-        return handle_comparison_request()
+    # if is_comparison: # commenting out missing return
+    #     return handle_comparison_request()
 
     # Parse dates or use defaults (last 6 months)
     try:
@@ -34,16 +35,16 @@ def stats():
             start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
         else:
             # Default to 6 months ago
-            start_date = datetime.now() - timedelta(days=180)
+            start_date = datetime.now(UTC) - timedelta(days=180)
 
         if end_date_str:
             end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
         else:
-            end_date = datetime.now()
+            end_date = datetime.now(UTC)
     except ValueError:
         # If date parsing fails, use default range
-        start_date = datetime.now() - timedelta(days=180)
-        end_date = datetime.now()
+        start_date = datetime.now(UTC) - timedelta(days=180)
+        end_date = datetime.now(UTC)
 
     # Build the filter query - only expenses where user is involved
     query_filters = [
@@ -64,7 +65,8 @@ def stats():
 
     # Execute the query with all filters
     expenses = (
-        Expense.query.filter(and_(*query_filters))
+        db.session.query(Expense)
+        .filter(and_(*query_filters))
         .order_by(Expense.date.desc())
         .all()
     )
@@ -79,7 +81,8 @@ def stats():
         Settlement.date <= end_date,
     ]
     settlements = (
-        Settlement.query.filter(and_(*settlement_filters))
+        db.session.query(Settlement)
+        .filter(and_(*settlement_filters))
         .order_by(Settlement.date)
         .all()
     )
@@ -169,7 +172,7 @@ def stats():
 
             # Add category information for the expense
             if hasattr(expense, "category_id") and expense.category_id:
-                category = Category.query.get(expense.category_id)
+                category = db.session.query(Category).get(expense.category_id)
                 if category:
                     expense_data["category_name"] = category.name
                     expense_data["category_icon"] = category.icon
@@ -212,9 +215,9 @@ def stats():
     # Initialize previous_total before querying
     previous_total = 0
 
-    previous_expenses = Expense.query.filter(
-        and_(*previous_period_filters)
-    ).all()
+    previous_expenses = (
+        db.session.query(Expense).filter(and_(*previous_period_filters)).all()
+    )
 
     # Process previous expenses and calculate total
     for expense in previous_expenses:
@@ -397,7 +400,8 @@ def stats():
 
     # Add each group's total for current user
     groups = (
-        Group.query.join(group_users)
+        db.session.query(Group)
+        .join(group_users)
         .filter(group_users.c.user_id == current_user.id)
         .all()
     )
@@ -420,7 +424,9 @@ def stats():
 
     # Try to get all user categories
     try:
-        for category in Category.query.filter_by(user_id=current_user.id).all():
+        for category in (
+            db.session.query(Category).filter_by(user_id=current_user.id).all()
+        ):
             if not category.parent_id:  # Only top-level categories
                 user_categories[category.id] = {
                     "name": category.name,
@@ -451,7 +457,7 @@ def stats():
             )
 
             # Fetch the actual expense object
-            expense_obj = Expense.query.get(expense_data["id"])
+            expense_obj = db.session.query(Expense).get(expense_data["id"])
 
             if (
                 expense_obj
@@ -459,17 +465,17 @@ def stats():
                 and expense_obj.category_id
             ):
                 cat_id = expense_obj.category_id
-                app.logger.info(f"Found category_id: {cat_id}")
+                app.logger.info("Found category_id: %s", cat_id)
 
                 # If it's a subcategory, use parent category ID instead
-                category = Category.query.get(cat_id)
+                category = db.session.query(Category).get(cat_id)
                 if (
                     category
                     and category.parent_id
                     and category.parent_id in user_categories
                 ):
                     cat_id = category.parent_id
-                    app.logger.info(f"Using parent category: {cat_id}")
+                    app.logger.info("Using parent category: %s", cat_id)
 
             # Only process if we have this category
             if cat_id in user_categories:
@@ -484,11 +490,11 @@ def stats():
                     )
             else:
                 app.logger.warning(
-                    f"Category ID {cat_id} not found in user_categories"
+                    "Category ID %s not found in user_categories", cat_id
                 )
     except Exception:
         # Log the full error for debugging
-        app.logger.exception("Error getting category data", exc_info=True)
+        app.logger.exception("Error getting category data")
         user_categories = {
             1: {"name": "Food", "total": 350, "color": "#ec4899"},
             2: {"name": "Housing", "total": 1200, "color": "#8b5cf6"},
@@ -515,12 +521,12 @@ def stats():
         cat_data["total"] for _, cat_data in sorted_categories[:8]
     ]
 
-    app.logger.info(f"Category names: {category_names}")
-    app.logger.info(f"Category totals: {category_totals}")
+    app.logger.info("Category names: %s", category_names)
+    app.logger.info("Category totals: %s", category_totals)
 
     # Category trend data for line chart
     category_trend_data = []
-    for cat_id, cat_data in sorted_categories[:4]:  # Top 4 for trend
+    for _, cat_data in sorted_categories[:4]:  # Top 4 for trend
         if "monthly" in cat_data:
             monthly_data = []
             for month_key in sorted(cat_data["monthly"].keys()):
@@ -544,7 +550,7 @@ def stats():
                 }
             )
 
-    app.logger.info(f"Category trend data: {category_trend_data}")
+    app.logger.info("Category trend data: %s", category_trend_data)
 
     # NEW CODE FOR TAG ANALYSIS
     # -------------------------
@@ -553,7 +559,7 @@ def stats():
     # Try to get tag information
     try:
         for expense_data in current_user_expenses:
-            expense_obj = Expense.query.get(expense_data["id"])
+            expense_obj = db.session.query(Expense).get(expense_data["id"])
             if expense_obj and hasattr(expense_obj, "tags"):
                 for tag in expense_obj.tags:
                     if tag.id not in tag_data:
@@ -565,7 +571,7 @@ def stats():
                     tag_data[tag.id]["total"] += expense_data["user_portion"]
     except Exception:
         # Fallback for tags in case of error
-        app.logger.exception("Error getting tag data", exc_info=True)
+        app.logger.exception("Error getting tag data")
         tag_data = {
             1: {"name": "Groceries", "total": 280, "color": "#f43f5e"},
             2: {"name": "Dining", "total": 320, "color": "#fb7185"},
@@ -584,8 +590,8 @@ def stats():
     tag_totals = [tag_data["total"] for _, tag_data in sorted_tags]
     tag_colors = [tag_data["color"] for _, tag_data in sorted_tags]
 
-    app.logger.info(f"Tag names: {tag_names}")
-    app.logger.info(f"Tag totals: {tag_totals}")
+    app.logger.info("Tag names: %s", tag_names)
+    app.logger.info("Tag totals: %s", tag_totals)
 
     # Calculate totals for each transaction type
     total_expenses_only = 0
@@ -611,10 +617,7 @@ def stats():
     net_cash_flow = total_income - total_expenses_only
 
     # Calculate savings rate if income is not zero
-    if total_income > 0:
-        savings_rate = (net_cash_flow / total_income) * 100
-    else:
-        savings_rate = 0
+    savings_rate = net_cash_flow / total_income * 100 if total_income > 0 else 0
 
     # Calculate expense to income ratio
     if total_income > 0:
@@ -627,7 +630,7 @@ def stats():
     liquidity_ratio = 3.5  # Example value
     account_growth = 7.8  # Example value
 
-    user_accounts = Account.query.filter_by(user_id=current_user.id).all()
+    user_accounts = db.session.query(Account).filter_by(user_id=current_user.id).all()
 
     return render_template(
         "stats.html",

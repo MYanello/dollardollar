@@ -1,5 +1,4 @@
-from datetime import datetime, timedelta
-from datetime import timezone as tz
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, ClassVar, Optional
 
 from sqlalchemy import ForeignKey, String, literal, or_
@@ -27,7 +26,7 @@ class Budget(Base):
     category_id: Mapped[int] = mapped_column(
         ForeignKey("categories.id"), nullable=False
     )
-    name: Mapped[Optional[str]] = mapped_column(
+    name: Mapped[str | None] = mapped_column(
         String(100)
     )  # Optional custom name for the budget
     amount: Mapped[float] = mapped_column(nullable=False)
@@ -36,13 +35,13 @@ class Budget(Base):
     )  # 'weekly', 'monthly', 'yearly'
     include_subcategories: Mapped[bool] = mapped_column(default=True)
     start_date: Mapped[datetime] = mapped_column(
-        nullable=False, default=datetime.now(tz.utc)
+        nullable=False, default=datetime.now(UTC)
     )
     is_recurring: Mapped[bool] = mapped_column(default=True)
     active: Mapped[bool] = mapped_column(default=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.now(tz.utc))
+    created_at: Mapped[datetime] = mapped_column(default=datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
-        default=datetime.now(tz.utc), onupdate=datetime.now(tz.utc)
+        default=datetime.now(UTC), onupdate=datetime.now(UTC)
     )
 
     # Relationships
@@ -59,7 +58,7 @@ class Budget(Base):
 
     def get_current_period_dates(self):
         """Get start and end dates for the current budget period."""
-        today: datetime = datetime.now(tz.utc).replace(
+        today: datetime = datetime.now(UTC).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
 
@@ -98,7 +97,7 @@ class Budget(Base):
         return today, today.replace(hour=23, minute=59, second=59)
 
     def calculate_spent_amount(self):
-        """Calculate spent amount in this budget's category during the period."""
+        """Calculate spent amount in budget's category during the period."""
         start_date: datetime
         end_date: datetime
         start_date, end_date = self.get_current_period_dates()
