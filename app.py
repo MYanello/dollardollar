@@ -116,16 +116,16 @@ scheduler.init_app(app)
 logging.basicConfig(level=getattr(logging, app.config["LOG_LEVEL"]))
 
 
-@scheduler.task("cron", id="monthly_reports", day=1, hour=1, minute=0)
-def scheduled_monthly_reports():
-    """Run on the 1st day of each month at 1:00 AM."""
-    send_automatic_monthly_reports()
+# @scheduler.task("cron", id="monthly_reports", day=1, hour=1, minute=0)
+# def scheduled_monthly_reports():
+#     """Run on the 1st day of each month at 1:00 AM."""
+#     send_automatic_monthly_reports()
 
 
-@scheduler.task("cron", id="simplefin_sync", hour=23, minute=0)
-def scheduled_simplefin_sync():
-    """Run every day at 11:00 PM"""
-    sync_all_simplefin_accounts()
+# @scheduler.task("cron", id="simplefin_sync", hour=23, minute=0)
+# def scheduled_simplefin_sync():
+#     """Run every day at 11:00 PM"""
+#     sync_all_simplefin_accounts()
 
 
 scheduler.start()
