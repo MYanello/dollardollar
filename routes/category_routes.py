@@ -1,5 +1,6 @@
-from datetime import datetime, timedelta
-from datetime import timezone as tz
+import csv
+import io
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from flask import (
@@ -371,7 +372,7 @@ def learn_from_transaction_history():
     days = int(request.form.get("days", 30))
 
     # Calculate start date
-    start_date: datetime = datetime.now(tz.utc) - timedelta(days=days)
+    start_date: datetime = datetime.now(UTC) - timedelta(days=days)
 
     # Get transactions from the specified period that have categories
     transactions: list[Expense] = (
@@ -462,7 +463,7 @@ def learn_from_transaction_history():
 
 @category_bp.route("/category_mappings/upload", methods=["POST"])
 @login_required_dev
-def upload_category_mappings() -> Response:  # noqa: C901, PLR0912, PLR0915
+def upload_category_mappings() -> Response:  # noqa: PLR0915
     """Upload and import category mappings from a CSV file."""
     if "mapping_file" not in request.files:
         flash("No file provided")
@@ -486,8 +487,6 @@ def upload_category_mappings() -> Response:  # noqa: C901, PLR0912, PLR0915
         file_content = mapping_file.read().decode("utf-8")
 
         # Parse CSV
-        import csv
-        import io
 
         csv_reader = csv.DictReader(io.StringIO(file_content))
         required_fields: list[str] = ["keyword", "category"]
@@ -643,9 +642,6 @@ def export_category_mappings():
             return redirect(url_for("manage_category_mappings"))
 
         # Create CSV in memory
-        import csv
-        import io
-
         output = io.StringIO()
         writer = csv.writer(output)
 

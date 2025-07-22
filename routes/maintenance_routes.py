@@ -1,4 +1,6 @@
-from datetime import datetime
+import csv
+import io
+from datetime import UTC, datetime
 
 from flask import (
     Blueprint,
@@ -7,11 +9,13 @@ from flask import (
     jsonify,
     redirect,
     request,
+    send_file,
     url_for,
 )
 from flask_login import current_user
 from sqlalchemy import or_
 
+from database import db
 from models import Expense, User
 from services.wrappers import login_required_dev
 
@@ -32,7 +36,7 @@ def update_notification_preferences():
 
 @maintenance_bp.route("/export_transactions", methods=["POST"])
 @login_required_dev
-def export_transactions():
+def export_transactions():  # noqa: PLR0915
     """Export transactions as CSV file based on filter criteria."""
     try:
         # Get filter criteria from request
@@ -42,23 +46,20 @@ def export_transactions():
         user_id = current_user.id
 
         # Extract filter parameters
-        start_date = filters.get("startDate")
-        end_date = filters.get("endDate")
-        paid_by = filters.get("paidBy", "all")
-        card_used = filters.get("cardUsed", "all")
-        group_id = filters.get("groupId", "all")
-        min_amount = filters.get("minAmount")
-        max_amount = filters.get("maxAmount")
-        description = filters.get("description", "")
+        if filters:
+            start_date = filters.get("startDate")
+            end_date = filters.get("endDate")
+            paid_by = filters.get("paidBy", "all")
+            card_used = filters.get("cardUsed", "all")
+            group_id = filters.get("groupId", "all")
+            min_amount = filters.get("minAmount")
+            max_amount = filters.get("maxAmount")
+            description = filters.get("description", "")
 
         # Import required libraries
-        import csv
-        import io
-
-        from flask import send_file
 
         # Build query with SQLAlchemy
-        query = Expense.query.filter(
+        query = db.select(Expense).filter(
             or_(
                 Expense.user_id == user_id,
                 Expense.split_with.like(f"%{user_id}%"),
@@ -68,11 +69,13 @@ def export_transactions():
         # Apply filters
         if start_date:
             query = query.filter(
-                Expense.date >= datetime.strptime(start_date, "%Y-%m-%d")
+                Expense.date
+                >= datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=UTC)
             )
         if end_date:
             query = query.filter(
-                Expense.date <= datetime.strptime(end_date, "%Y-%m-%d")
+                Expense.date
+                <= datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=UTC)
             )
         if paid_by and paid_by != "all":
             query = query.filter(Expense.paid_by == paid_by)
@@ -136,7 +139,7 @@ def export_transactions():
                         break
 
             # Find the name of who paid
-            payer = User.query.filter_by(id=expense.paid_by).first()
+            payer = db.select(User).filter_by(id=expense.paid_by).first()
             payer_name = payer.name if payer else expense.paid_by
 
             writer.writerow(
@@ -158,7 +161,7 @@ def export_transactions():
         output.seek(0)
 
         # Generate filename with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         filename = f"dollar_bill_transactions_{timestamp}.csv"
 
         # Send file for download

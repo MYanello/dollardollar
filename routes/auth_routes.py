@@ -1,6 +1,6 @@
 import hashlib
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from flask import (
     Blueprint,
@@ -77,7 +77,7 @@ def signup() -> Response | str:
         def generate_user_color(user_id) -> str:
             """Generate a consistent color for a user based on their ID."""
             # Use MD5 hash to generate a consistent color
-            hash_object = hashlib.md5(user_id.encode())
+            hash_object = hashlib.md5(user_id.encode())  # noqa: S324
             hash_hex: str = hash_object.hexdigest()
 
             # Use the first 6 characters of the hash to create a color
@@ -127,7 +127,7 @@ def signup() -> Response | str:
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 @restrict_demo_access
-def login() -> Response | str:  # noqa: C901
+def login() -> Response | str:
     # Check if we should show a logout message
     if session.pop("show_logout_message", False):
         flash(
@@ -176,7 +176,7 @@ def login() -> Response | str:  # noqa: C901
         if user and user.check_password(password):
             login_user(user)
             # Update last login time
-            user.last_login = datetime.now(timezone.utc)
+            user.last_login = datetime.now(UTC)
 
             if current_app.config.get("SIMPLEFIN_ENABLED", False):
                 try:
@@ -190,8 +190,7 @@ def login() -> Response | str:  # noqa: C901
                     if simplefin_settings and (
                         not simplefin_settings.last_sync
                         or (
-                            datetime.now(timezone.utc)
-                            - simplefin_settings.last_sync
+                            datetime.now(UTC) - simplefin_settings.last_sync
                         ).total_seconds()
                         > 6 * 3600
                     ):

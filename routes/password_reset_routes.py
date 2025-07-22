@@ -17,7 +17,7 @@ def reset_password_request():
 
     if request.method == "POST":
         email = request.form["email"]
-        user = User.query.filter_by(id=email).first()
+        user = db.select(User).filter_by(id=email).first()
 
         if user:
             token = user.generate_reset_token()
@@ -53,7 +53,7 @@ def reset_password_request():
                     html=body_html,
                 )
                 mail.send(msg)
-                app.logger.info(f"Password reset email sent to {email}")
+                app.logger.info("Password reset email sent to %s", email)
 
                 # Success message
                 # (don't reveal if email exists or not for security)
@@ -74,7 +74,7 @@ def reset_password_request():
                 "you will receive a password reset link shortly."
             )
             app.logger.info(
-                f"Password reset requested for non-existent email: {email}"
+                "Password reset requested for non-existent email:", email
             )
 
         return redirect(url_for("login"))
@@ -92,7 +92,7 @@ def reset_password(token):
         flash("Invalid reset link.")
         return redirect(url_for("login"))
 
-    user = User.query.filter_by(id=email).first()
+    user = db.select(User).filter_by(id=email).first()
 
     # Verify the token is valid
     if not user or not user.verify_reset_token(token):
@@ -114,7 +114,7 @@ def reset_password(token):
         user.clear_reset_token()
         db.session.commit()
 
-        app.logger.info(f"Password reset successful for user: {email}")
+        app.logger.info("Password reset successful for user: %s", email)
         flash(
             "Your password has been reset successfully. "
             "You can now log in with your new password."

@@ -1,6 +1,5 @@
 import base64
-from datetime import datetime
-from datetime import timezone as tz
+from datetime import UTC, datetime
 
 from flask import (
     Blueprint,
@@ -168,7 +167,7 @@ def simplefin_fetch_accounts():
 
 @simplefin_bp.route("/simplefin/add_accounts", methods=["POST"])
 @login_required_dev
-def simplefin_add_accounts():  # noqa: C901 PLR0912 PLR0915
+def simplefin_add_accounts():  # noqa: PLR0915
     """Process selected accounts to add to the system."""
     # Get selected account IDs from form
     account_ids = request.form.getlist("account_ids")
@@ -246,7 +245,7 @@ def simplefin_add_accounts():  # noqa: C901 PLR0912 PLR0915
                 # Update existing account
                 existing_account.balance = sf_account.get("balance", 0)
                 existing_account.import_source = "simplefin"
-                existing_account.last_sync = datetime.now(tz.utc)
+                existing_account.last_sync = datetime.now(UTC)
                 existing_account.external_id = sf_account.get("id")
                 existing_account.status = "active"
                 existing_account.type = sf_account.get(
@@ -268,7 +267,7 @@ def simplefin_add_accounts():  # noqa: C901 PLR0912 PLR0915
                     user_id=current_user.id,
                     import_source="simplefin",
                     external_id=sf_account.get("id"),
-                    last_sync=datetime.now(tz.utc),
+                    last_sync=datetime.now(UTC),
                     status="active",
                 )
                 db.session.add(new_account)
@@ -322,7 +321,7 @@ def simplefin_add_accounts():  # noqa: C901 PLR0912 PLR0915
         db.session.commit()
 
         # Update the SimpleFin settings to record the sync time
-        simplefin_settings.last_sync = datetime.now(tz.utc)
+        simplefin_settings.last_sync = datetime.now(UTC)
         db.session.commit()
 
         flash(
@@ -415,7 +414,7 @@ def sync_account(account_id):
 
         # Update account details
         account.balance = sf_account.get("balance", account.balance)
-        account.last_sync = datetime.now(tz.utc)
+        account.last_sync = datetime.now(UTC)
 
         # Create transaction objects using the enhanced client method
         transaction_objects, _ = (
@@ -463,7 +462,7 @@ def sync_account(account_id):
 
         # Update the SimpleFin settings last_sync time
         if simplefin_settings:
-            simplefin_settings.last_sync = datetime.now(tz.utc)
+            simplefin_settings.last_sync = datetime.now(UTC)
             db.session.commit()
 
         return jsonify(
@@ -669,7 +668,7 @@ def sync_all_simplefin_accounts():
                 # (to prevent excessive syncing)
                 if (
                     settings.last_sync
-                    and (datetime(tz.utc) - settings.last_sync).total_seconds()
+                    and (datetime(UTC) - settings.last_sync).total_seconds()
                     < 43200
                 ):  # 12 hours
                     continue
@@ -736,7 +735,7 @@ def sync_all_simplefin_accounts():
                         account.balance = sf_account.get(
                             "balance", account.balance
                         )
-                        account.last_sync = datetime.now(tz.utc)
+                        account.last_sync = datetime.now(UTC)
                         accounts_updated += 1
 
                         # Create transaction objects using the enhanced client method
@@ -787,7 +786,7 @@ def sync_all_simplefin_accounts():
                     db.session.commit()
 
                     # Update the SimpleFin settings last_sync time
-                    settings.last_sync = datetime.now(tz.utc)
+                    settings.last_sync = datetime.now(UTC)
                     db.session.commit()
 
                     current_app.logger.info(

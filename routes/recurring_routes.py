@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 
 from flask import (
     Blueprint,
@@ -38,21 +38,27 @@ recurring_bp = Blueprint("recurring", __name__)
 @login_required_dev
 def recurring():
     base_currency = get_base_currency()
-    recurring_expenses = RecurringExpense.query.filter(
-        or_(
-            RecurringExpense.user_id == current_user.id,
-            RecurringExpense.split_with.like(f"%{current_user.id}%"),
+    recurring_expenses = (
+        db.select(RecurringExpense)
+        .filter(
+            or_(
+                RecurringExpense.user_id == current_user.id,
+                RecurringExpense.split_with.like(f"%{current_user.id}%"),
+            )
         )
-    ).all()
-    users = User.query.all()
+        .all()
+    )
+    users = db.select(User).all()
     groups = (
-        Group.query.join(group_users)
+        db.select(Group)
+        .join(group_users)
         .filter(group_users.c.user_id == current_user.id)
         .all()
     )
-    currencies = Currency.query.all()
+    currencies = db.select(Currency).all()
     categories = (
-        Category.query.filter_by(user_id=current_user.id)
+        db.select(Category)
+        .filter_by(user_id=current_user.id)
         .order_by(Category.name)
         .all()
     )
@@ -72,18 +78,20 @@ def recurring():
 def get_recurring_form_html():
     """Return the HTML for the add recurring transaction form."""
     base_currency = get_base_currency()
-    users = User.query.all()
+    users = db.select(User).all()
     groups = (
-        Group.query.join(group_users)
+        db.select(Group)
+        .join(group_users)
         .filter(group_users.c.user_id == current_user.id)
         .all()
     )
     categories = (
-        Category.query.filter_by(user_id=current_user.id)
+        db.select(Category)
+        .filter_by(user_id=current_user.id)
         .order_by(Category.name)
         .all()
     )
-    currencies = Currency.query.all()
+    currencies = db.select(Currency).all()
 
     return render_template(
         "partials/recurring_transaction_form.html",
@@ -97,7 +105,7 @@ def get_recurring_form_html():
 
 @recurring_bp.route("/add_recurring", methods=["POST"])
 @login_required_dev
-def add_recurring():  # noqa: C901 PLR0912 PLR0915
+def add_recurring():  # noqa: PLR0915
     try:
         # Get transaction type
         transaction_type = request.form.get("transaction_type", "expense")
@@ -106,12 +114,12 @@ def add_recurring():  # noqa: C901 PLR0912 PLR0915
         try:
             start_date = datetime.strptime(
                 request.form["start_date"], "%Y-%m-%d"
-            )
+            ).replace(tzinfo=UTC)
             end_date = None
             if request.form.get("end_date"):
                 end_date = datetime.strptime(
                     request.form["end_date"], "%Y-%m-%d"
-                )
+                ).replace(tzinfo=UTC)
         except ValueError:
             flash("Invalid date format. Please use YYYY-MM-DD format.")
             return redirect(url_for("recurring"))
@@ -128,7 +136,7 @@ def add_recurring():  # noqa: C901 PLR0912 PLR0915
                 # Try to get the account name to use as
                 # card_used for backward compatibility
                 try:
-                    account = Account.query.get(int(account_id))
+                    account = db.selec(Account).get(int(account_id))
                     if account:
                         card_used = account.name
                 except:  # noqa: E722
@@ -261,7 +269,7 @@ def add_recurring():  # noqa: C901 PLR0912 PLR0915
 @recurring_bp.route("/toggle_recurring/<int:recurring_id>", methods=["POST"])
 @login_required_dev
 def toggle_recurring(recurring_id):
-    recurring_expense = RecurringExpense.query.get_or_404(recurring_id)
+    recurring_expense = db.select(RecurringExpense).get_or_404(recurring_id)
 
     # Security check
     if recurring_expense.user_id != current_user.id:
@@ -281,7 +289,7 @@ def toggle_recurring(recurring_id):
 @recurring_bp.route("/delete_recurring/<int:recurring_id>", methods=["POST"])
 @login_required_dev
 def delete_recurring(recurring_id):
-    recurring_expense = RecurringExpense.query.get_or_404(recurring_id)
+    recurring_expense = db.get_or_404(RecurringExpense, recurring_id)
 
     # Security check
     if recurring_expense.user_id != current_user.id:
@@ -301,7 +309,7 @@ def delete_recurring(recurring_id):
 def edit_recurring_page(recurring_id):
     """Load the recurring expenses page with form pre-filled for editing."""
     # Find the recurring expense
-    recurring = RecurringExpense.query.get_or_404(recurring_id)
+    recurring = db.get_or_404(RecurringExpense, recurring_id)
 
     # Security check: Only the creator can edit
     if recurring.user_id != current_user.id:
@@ -310,21 +318,27 @@ def edit_recurring_page(recurring_id):
 
     # Prepare the same data needed for the recurring page
     base_currency = get_base_currency()
-    recurring_expenses = RecurringExpense.query.filter(
-        or_(
-            RecurringExpense.user_id == current_user.id,
-            RecurringExpense.split_with.like(f"%{current_user.id}%"),
+    recurring_expenses = (
+        db.select(RecurringExpense)
+        .filter(
+            or_(
+                RecurringExpense.user_id == current_user.id,
+                RecurringExpense.split_with.like(f"%{current_user.id}%"),
+            )
         )
-    ).all()
-    users = User.query.all()
+        .all()
+    )
+    users = db.select(User).all()
     groups = (
-        Group.query.join(group_users)
+        db.select(Group)
+        .join(group_users)
         .filter(group_users.c.user_id == current_user.id)
         .all()
     )
-    currencies = Currency.query.all()
+    currencies = db.select(Currency).all()
     categories = (
-        Category.query.filter_by(user_id=current_user.id)
+        db.select(Category)
+        .filter_by(user_id=current_user.id)
         .order_by(Category.name)
         .all()
     )
@@ -345,11 +359,11 @@ def edit_recurring_page(recurring_id):
 
 @recurring_bp.route("/update_recurring/<int:recurring_id>", methods=["POST"])
 @login_required_dev
-def update_recurring(recurring_id):  # noqa: C901 PLR0912 PLR0915
+def update_recurring(recurring_id):  # noqa: PLR0915
     """Update an existing recurring transaction."""
     try:
         # Find the recurring transaction
-        recurring = RecurringExpense.query.get_or_404(recurring_id)
+        recurring = db.get_or_404(RecurringExpense, recurring_id)
 
         # Security check: Only the creator can update
         if recurring.user_id != current_user.id:
@@ -365,12 +379,12 @@ def update_recurring(recurring_id):  # noqa: C901 PLR0912 PLR0915
         try:
             start_date = datetime.strptime(
                 request.form["start_date"], "%Y-%m-%d"
-            )
+            ).replace(tzinfo=UTC)
             end_date = None
             if request.form.get("end_date"):
                 end_date = datetime.strptime(
                     request.form.get("end_date"), "%Y-%m-%d"
-                )
+                ).replace(tzinfo=UTC)
         except ValueError:
             flash("Invalid date format. Please use YYYY-MM-DD format.")
             return redirect(url_for("recurring"))
@@ -392,13 +406,13 @@ def update_recurring(recurring_id):  # noqa: C901 PLR0912 PLR0915
             else:
                 # Try to get the account name for backward compatibility
                 try:
-                    account = Account.query.get(int(account_id))
+                    account = db.select(Account).get(int(account_id))
                     if account:
                         recurring.card_used = account.name
                         recurring.account_id = int(account_id)
                 except:  # noqa: E722
                     # Fallback - don't change card_used
-                    pass
+                    current_app.logger.exception("Unable to get account name")
 
         # Handle currency if provided
         if request.form.get("currency_code"):
@@ -520,9 +534,11 @@ def get_recurring_transactions():
         )
 
         # Get all ignored patterns for this user
-        ignored_patterns = IgnoredRecurringPattern.query.filter_by(
-            user_id=current_user.id
-        ).all()
+        ignored_patterns = (
+            db.select(IgnoredRecurringPattern)
+            .filter_by(user_id=current_user.id)
+            .all()
+        )
         ignored_keys = [pattern.pattern_key for pattern in ignored_patterns]
 
         # Prepare response data
@@ -559,13 +575,13 @@ def get_recurring_transactions():
 
             # Add account name if available
             if candidate["account_id"]:
-                account = Account.query.get(candidate["account_id"])
+                account = db.select(Account).get(candidate["account_id"])
                 if account:
                     candidate_dict["account_name"] = account.name
 
             # Add category name if available
             if candidate["category_id"]:
-                category = Category.query.get(candidate["category_id"])
+                category = db.select(Category).get(candidate["category_id"])
                 if category:
                     candidate_dict["category_name"] = category.name
                     candidate_dict["category_icon"] = category.icon
@@ -637,7 +653,7 @@ def recurring_candidate_history(candidate_id):
         # Fetch the actual transactions
         transactions = []
         for tx_id in transaction_ids:
-            expense = Expense.query.get(tx_id)
+            expense = db.select(Expense).get(tx_id)
             if expense and expense.user_id == current_user.id:
                 tx_data = {
                     "id": expense.id,
@@ -721,11 +737,11 @@ def convert_to_recurring(candidate_id):
             # Additional fields from form
             recurring.start_date = datetime.strptime(
                 request.form.get("start_date"), "%Y-%m-%d"
-            )
+            ).replace(tzinfo=UTC)
             if request.form.get("end_date"):
                 recurring.end_date = datetime.strptime(
                     request.form.get("end_date"), "%Y-%m-%d"
-                )
+                ).replace(tzinfo=UTC)
 
             # Process split settings
             is_personal = request.form.get("personal_expense") == "on"
@@ -827,9 +843,11 @@ def ignore_recurring_candidate(candidate_id):
         pattern_key = f"{candidate_data['description']}_{candidate_data['amount']}_{candidate_data['frequency']}"  # noqa: E501
 
         # Check if already ignored
-        existing = IgnoredRecurringPattern.query.filter_by(
-            user_id=current_user.id, pattern_key=pattern_key
-        ).first()
+        existing = (
+            db.select(IgnoredRecurringPattern)
+            .filter_by(user_id=current_user.id, pattern_key=pattern_key)
+            .first()
+        )
 
         if existing:
             return jsonify(
@@ -869,7 +887,7 @@ def restore_ignored_pattern(pattern_id):
     """Restore a previously ignored recurring pattern."""
     try:
         # Find the pattern
-        pattern = IgnoredRecurringPattern.query.get_or_404(pattern_id)
+        pattern = db.get_or_404(IgnoredRecurringPattern, pattern_id)
 
         # Security check
         if pattern.user_id != current_user.id:
@@ -899,7 +917,8 @@ def manage_ignored_patterns():
     """View and manage ignored recurring transaction patterns."""
     # Get all ignored patterns for the current user
     ignored_patterns = (
-        IgnoredRecurringPattern.query.filter_by(user_id=current_user.id)
+        db.select(IgnoredRecurringPattern)
+        .filter_by(user_id=current_user.id)
         .order_by(IgnoredRecurringPattern.ignore_date.desc())
         .all()
     )
@@ -920,7 +939,7 @@ def get_recurring(recurring_id):
     """Get recurring transaction details for editing."""
     try:
         # Find the recurring transaction
-        recurring = RecurringExpense.query.get_or_404(recurring_id)
+        recurring = db.get_or_404(RecurringExpense, recurring_id)
 
         # Security check: Only the creator can edit
         if recurring.user_id != current_user.id:

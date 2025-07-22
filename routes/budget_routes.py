@@ -1099,7 +1099,7 @@ def budget_transactions(budget_id) -> tuple[Response, int]:  # noqa: PLR0915
         return jsonify({"error": "Unauthorized"}), 403
 
     # Default time period (last 30 days)
-    end_date: datetime = datetime.now()
+    end_date: datetime = datetime.now(tz=UTC)
     start_date: datetime = end_date - timedelta(days=30)
 
     transactions: list[Any] = []

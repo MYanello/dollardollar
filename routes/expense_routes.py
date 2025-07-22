@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 
 from flask import (
     Blueprint,
@@ -58,7 +58,7 @@ def add_expense():  # noqa: PLR0915
             try:
                 expense_date = datetime.strptime(
                     request.form["date"], "%Y-%m-%d"
-                )
+                ).replace(tzinfo=UTC)
             except ValueError:
                 flash("Invalid date format. Please use YYYY-MM-DD format.")
                 return redirect(url_for("transaction.transactions"))
@@ -346,7 +346,7 @@ def update_expense(expense_id):  # noqa: PLR0915
         try:  # noqa: SIM105
             expense.date = datetime.strptime(
                 request.form.get("date"), "%Y-%m-%d"
-            )
+            ).replace(tzinfo=UTC)
         except (ValueError, TypeError):
             # Keep existing date if conversion fails
             pass

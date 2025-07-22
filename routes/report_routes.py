@@ -1,11 +1,12 @@
 import calendar
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from flask import Blueprint, current_app, flash, render_template, request
 from flask_login import current_user
 from flask_mail import Message
 from sqlalchemy import and_, or_
 
+from database import db
 from extensions import mail
 from models import Budget, Expense, User
 from services.helpers import calculate_balances, get_base_currency
@@ -16,16 +17,16 @@ report_bp = Blueprint("report", __name__)
 
 def generate_monthly_report_data(user_id, year, month):
     """Generate data for monthly expense report."""
-    user = User.query.get(user_id)
+    user = db.select(User).get(user_id)
     if not user:
         return None
 
     # Calculate date range for the month
-    start_date = datetime(year, month, 1)
+    start_date = datetime(year, month, 1, tzinfo=UTC)
     if month == 12:
-        end_date = datetime(year + 1, 1, 1) - timedelta(days=1)
+        end_date = datetime(year + 1, 1, 1, tzinfo=UTC) - timedelta(days=1)
     else:
-        end_date = datetime(year, month + 1, 1) - timedelta(days=1)
+        end_date = datetime(year, month + 1, 1, tzinfo=UTC) - timedelta(days=1)
 
     # Get base currency
     base_currency = get_base_currency()
@@ -45,7 +46,10 @@ def generate_monthly_report_data(user_id, year, month):
     ]
 
     expenses_raw = (
-        Expense.query.filter(and_(*query_filters)).order_by(Expense.date).all()
+        db.select(Expense)
+        .query.filter(and_(*query_filters))
+        .order_by(Expense.date)
+        .all()
     )
 
     # Calculate user's portion of expenses
@@ -81,7 +85,7 @@ def generate_monthly_report_data(user_id, year, month):
             total_spent += user_portion
 
     # Get budget status
-    budgets = Budget.query.filter_by(user_id=user_id, active=True).all()
+    budgets = db.select(Budget).filter_by(user_id=user_id, active=True).all()
     budget_status = []
 
     for budget in budgets:
@@ -161,13 +165,15 @@ def generate_monthly_report_data(user_id, year, month):
     prev_month = month - 1 if month > 1 else 12
     prev_year = year if month > 1 else year - 1
 
-    prev_start_date = datetime(prev_year, prev_month, 1)
-    if prev_month == 12:
-        prev_end_date = datetime(prev_year + 1, 1, 1) - timedelta(days=1)
-    else:
-        prev_end_date = datetime(prev_year, prev_month + 1, 1) - timedelta(
+    prev_start_date = datetime(prev_year, prev_month, 1, tzinfo=UTC)
+    if prev_month == 12:  # noqa: PLR2004
+        prev_end_date = datetime(prev_year + 1, 1, 1, tzinfo=UTC) - timedelta(
             days=1
         )
+    else:
+        prev_end_date = datetime(
+            prev_year, prev_month + 1, 1, tzinfo=UTC
+        ) - timedelta(days=1)
 
     prev_query_filters = [
         or_(
@@ -177,7 +183,7 @@ def generate_monthly_report_data(user_id, year, month):
         Expense.date <= prev_end_date,
     ]
 
-    prev_expenses = Expense.query.filter(and_(*prev_query_filters)).all()
+    prev_expenses = db.select(Expense).filter(and_(*prev_query_filters)).all()
     prev_total = 0
 
     for expense in prev_expenses:
@@ -227,7 +233,7 @@ def send_monthly_report(user_id, year, month):
         report_data = generate_monthly_report_data(user_id, year, month)
         if not report_data:
             current_app.logger.error(
-                f"Failed to generate report data for user {user_id}"
+                "Failed to generate report data for user %s", user_id
             )
             return False
 
@@ -257,9 +263,7 @@ def send_monthly_report(user_id, year, month):
         return True
 
     except Exception:
-        current_app.logger.exception(
-            "Error sending monthly report", exc_info=True
-        )
+        current_app.logger.exception("Error sending monthly report")
         return False
 
 
@@ -271,12 +275,12 @@ def generate_monthly_report():
         try:
             report_date = datetime.strptime(
                 request.form.get("report_month", ""), "%Y-%m"
-            )
+            ).replace(tzinfo=UTC)
             report_year = report_date.year
             report_month = report_date.month
         except ValueError:
             # Default to previous month if invalid input
-            today = datetime.now()
+            today = datetime.now(UTC)
             if today.month == 1:
                 report_month = 12
                 report_year = today.year - 1
@@ -297,7 +301,7 @@ def generate_monthly_report():
     # For GET request, show the form
     # Get the last 12 months for selection
     months = []
-    today = datetime.now()
+    today = datetime.now(UTC)
     for i in range(12):
         if today.month - i <= 0:
             month = today.month - i + 12
@@ -318,7 +322,7 @@ def send_automatic_monthly_reports():
     """Send monthly reports to all users who have opted in."""
     with current_app.app_context():
         # Get the previous month
-        today = datetime.now()
+        today = datetime.now(UTC)
         if today.month == 1:
             report_month = 12
             report_year = today.year - 1
@@ -329,7 +333,7 @@ def send_automatic_monthly_reports():
         # Get users who have opted in
         # (you'd need to add this field to User model)
         # For now, we'll assume all users want reports
-        users = User.query.all()
+        users = db.select(User).all()
 
         current_app.logger.info(
             f"Starting to send monthly reports for {calendar.month_name[report_month]} {report_year}"

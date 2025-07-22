@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from flask import Blueprint, render_template
@@ -24,8 +24,8 @@ dashboard_bp = Blueprint("dashboard", __name__)
 @dashboard_bp.route("/")
 @login_required_dev
 @demo_time_limited
-def dashboard() -> str:  # noqa: C901, PLR0912, PLR0915
-    now: datetime = datetime.now(timezone.utc)
+def dashboard() -> str:  # noqa: PLR0915
+    now: datetime = datetime.now(UTC)
     base_currency: dict[str, str] = get_base_currency()
     # Fetch all expenses where the user is either
     # the creator or a split participant

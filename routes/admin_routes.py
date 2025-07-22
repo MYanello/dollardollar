@@ -51,9 +51,9 @@ def add_user():
         flash("Access denied. Admin privileges required.")
         return redirect(url_for("dashboard.dashboard"))
 
-    email: str = request.form.get("email")
-    password: str = request.form.get("password")
-    name: str = request.form.get("name")
+    email: str = request.form.get("email") or ""
+    password: str = request.form.get("password") or ""
+    name: str = request.form.get("name") or ""
     is_admin: bool = request.form.get("is_admin") == "on"
 
     if db.session.query(User).filter_by(id=email).first():

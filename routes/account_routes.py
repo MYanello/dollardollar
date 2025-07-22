@@ -1,5 +1,7 @@
-from datetime import datetime
-from datetime import timezone as tz
+import csv
+import io
+from collections import Counter
+from datetime import UTC, datetime
 from typing import Any
 
 from flask import (
@@ -191,7 +193,7 @@ def add_account():
         db.session.commit()
 
         flash("Account added successfully")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         db.session.rollback()
         flash(f"Error adding account: {e!s}")
 
@@ -273,7 +275,7 @@ def update_account():
         db.session.commit()
         flash("Account updated successfully")
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         db.session.rollback()
         flash(f"Error updating account: {e!s}")
 
@@ -316,7 +318,7 @@ def delete_account(account_id) -> tuple[Response, int]:
 
 @account_bp.route("/import_csv", methods=["POST"])
 @login_required_dev
-def import_csv() -> Response | str:  # noqa: C901 PLR0912 PLR0915
+def import_csv() -> Response | str:  # noqa: PLR0915 PLR0911
     """Import transactions from a CSV file."""
     if "csv_file" not in request.files:
         flash("No file provided")
@@ -371,8 +373,6 @@ def import_csv() -> Response | str:  # noqa: C901 PLR0912 PLR0915
                 delimiter = custom_delimiter
         file_content = csv_file.read().decode("utf-8")
         # Parse CSV
-        import csv
-        import io
 
         csv_reader = csv.DictReader(
             io.StringIO(file_content), delimiter=delimiter
@@ -392,7 +392,7 @@ def import_csv() -> Response | str:  # noqa: C901 PLR0912 PLR0915
 
         # Use the enhanced determine_transaction_type
         # function that accepts account_id
-        def determine_transaction_type_for_import(row, current_account_id=None):  # noqa: PLR0911 PLR0912 C901
+        def determine_transaction_type_for_import(row, current_account_id=None):  # noqa: PLR0911
             """Determine transaction type based on row data from CSV import."""
             type_column = request.form.get("type_column")
             negative_is_expense = "negative_is_expense" in request.form
@@ -415,7 +415,8 @@ def import_csv() -> Response | str:  # noqa: C901 PLR0912 PLR0915
                 if type_value in ["transfer", "move", "xfer"]:
                     return "transfer"
 
-            # If no type column or unknown value, try to determine from description
+            # If no type column or unknown value,
+            # try to determine from description
             description = row.get(description_column, "").strip()
             if description:
                 # Common transfer keywords
@@ -468,7 +469,8 @@ def import_csv() -> Response | str:  # noqa: C901 PLR0912 PLR0915
                 if amount > 0 and negative_is_expense:
                     return "income"
                 if amount < 0 and not negative_is_expense:
-                    return "income"  # In some systems, negative means money coming in
+                    return "income"  # In some systems,
+                    # negative means money coming in
             except ValueError:
                 # If amount can't be parsed, default to expense
                 return "expense"
@@ -487,8 +489,6 @@ def import_csv() -> Response | str:  # noqa: C901 PLR0912 PLR0915
         # Use the most frequent card as default if available
         default_card = "Imported Card"
         if existing_cards:
-            from collections import Counter
-
             card_counter = Counter()
             for card in existing_cards:
                 card_counter[card] += 1
@@ -497,14 +497,22 @@ def import_csv() -> Response | str:  # noqa: C901 PLR0912 PLR0915
         # Define date parser based on selected format
         def parse_date(date_str):
             if date_format == "MM/DD/YYYY":
-                return datetime.strptime(date_str, "%m/%d/%Y")
+                return datetime.strptime(date_str, "%m/%d/%Y").replace(
+                    tzinfo=UTC
+                )
             if date_format == "DD/MM/YYYY":
-                return datetime.strptime(date_str, "%d/%m/%Y")
+                return datetime.strptime(date_str, "%d/%m/%Y").replace(
+                    tzinfo=UTC
+                )
             if date_format == "YYYY-MM-DD":
-                return datetime.strptime(date_str, "%Y-%m-%d")
+                return datetime.strptime(date_str, "%Y-%m-%d").replace(
+                    tzinfo=UTC
+                )
             if date_format == "YYYY/MM/DD":
-                return datetime.strptime(date_str, "%Y/%m/%d")
-            return datetime.strptime(date_str, "%m/%d/%Y")  # Default
+                return datetime.strptime(date_str, "%Y/%m/%d").replace(
+                    tzinfo=UTC
+                )
+            return datetime.strptime(date_str, "%m/%d/%Y").replace(tzinfo=UTC)
 
         # Process each row
         imported_count = 0
@@ -555,7 +563,8 @@ def import_csv() -> Response | str:  # noqa: C901 PLR0912 PLR0915
                 if account and is_transfer:
                     # This is an internal transfer
                     transaction_type = "transfer"
-                    # Use the detected accounts, falling back to the selected account
+                    # Use the detected accounts,
+                    # falling back to the selected account
                     source_account_id = source_account_id or account.id
                     # If we couldn't determine the destination, it stays None
                 else:
@@ -587,7 +596,8 @@ def import_csv() -> Response | str:  # noqa: C901 PLR0912 PLR0915
                         duplicate_count += 1
                         continue
 
-                # Get category from CSV or auto-categorize (but not for transfers)
+                # Get category from CSV or auto-categorize
+                # (but not for transfers)
                 category_id = None
                 if transaction_type != "transfer":
                     category_name = None
@@ -662,7 +672,7 @@ def import_csv() -> Response | str:  # noqa: C901 PLR0912 PLR0915
         # Update account balance if specified
         if account and imported_count > 0:
             # Update the last sync time
-            account.last_sync = datetime.now(tz.utc)
+            account.last_sync = datetime.now(UTC)
             db.session.commit()
 
         # Flash success message

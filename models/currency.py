@@ -1,5 +1,4 @@
-from datetime import datetime
-from datetime import timezone as tz
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, ClassVar
 
 from sqlalchemy import String
@@ -27,7 +26,7 @@ class Currency(Base):
     is_base: Mapped[bool] = mapped_column(
         default=False
     )  # Whether this is the base currency
-    last_updated: Mapped[datetime] = mapped_column(default=datetime.now(tz.utc))
+    last_updated: Mapped[datetime] = mapped_column(default=datetime.now(UTC))
 
     accounts: Mapped[list["Account"]] = relationship(
         "Account", back_populates="currency", lazy=True, init=False

@@ -26,11 +26,12 @@ group_bp = Blueprint("group", __name__)
 @login_required_dev
 def groups():
     groups = (
-        Group.query.join(group_users)
+        db.session.query(Group)
+        .join(group_users)
         .filter(group_users.c.user_id == current_user.id)
         .all()
     )
-    all_users = User.query.all()
+    all_users = db.session.query(User).all()
     return render_template("groups.html", groups=groups, users=all_users)
 
 
@@ -38,8 +39,8 @@ def groups():
 @login_required_dev
 def create_group():
     try:
-        name = request.form.get("name")
-        description = request.form.get("description")
+        name = request.form.get("name") or "Unknown"
+        description = request.form.get("description") or "Unknown"
         member_ids = request.form.getlist("members")
 
         group = Group(
@@ -51,7 +52,7 @@ def create_group():
 
         # Add selected members
         for member_id in member_ids:
-            user = User.query.filter_by(id=member_id).first()
+            user = db.session.query(User).filter_by(id=member_id).first()
             if user and user != current_user:
                 group.members.append(user)
 
@@ -68,25 +69,27 @@ def create_group():
 @login_required_dev
 def group_details(group_id):
     base_currency = get_base_currency()
-    group = Group.query.get_or_404(group_id)
+    group = db.get_or_404(Group, group_id)
 
     # Check if user is member of group
     if current_user not in group.members:
         flash("Access denied. You are not a member of this group.")
         return redirect(url_for("groups"))
     categories = (
-        Category.query.filter_by(user_id=current_user.id)
+        db.select(Category)
+        .filter_by(user_id=current_user.id)
         .order_by(Category.name)
         .all()
     )
 
     expenses = (
-        Expense.query.filter_by(group_id=group_id)
+        db.select(Expense)
+        .filter_by(group_id=group_id)
         .order_by(Expense.date.desc())
         .all()
     )
-    all_users = User.query.all()
-    currencies = Currency.query.all()
+    all_users = db.select(User).all()
+    currencies = db.select(Currency).all()
     return render_template(
         "group_details.html",
         group=group,
@@ -101,13 +104,13 @@ def group_details(group_id):
 @group_bp.route("/groups/<int:group_id>/add_member", methods=["POST"])
 @login_required_dev
 def add_group_member(group_id):
-    group = Group.query.get_or_404(group_id)
+    group = db.get_or_404(Group, group_id)
     if current_user != group.creator:
         flash("Only group creator can add members")
         return redirect(url_for("group_details", group_id=group_id))
 
     member_id = request.form.get("user_id")
-    user = User.query.filter_by(id=member_id).first()
+    user = db.select(User).filter_by(id=member_id).first()
 
     if user and user not in group.members:
         group.members.append(user)
@@ -130,12 +133,12 @@ def add_group_member(group_id):
 )
 @login_required_dev
 def remove_group_member(group_id, member_id):
-    group = Group.query.get_or_404(group_id)
+    group = db.get_or_404(Group, group_id)
     if current_user != group.creator:
         flash("Only group creator can remove members")
         return redirect(url_for("group_details", group_id=group_id))
 
-    user = User.query.filter_by(id=member_id).first()
+    user = db.select(User).filter_by(id=member_id).first()
     if user and user in group.members and user != group.creator:
         group.members.remove(user)
         db.session.commit()
@@ -149,7 +152,7 @@ def remove_group_member(group_id, member_id):
 def delete_group(group_id):
     """Delete a group and its associated expenses."""
     # Find the group
-    group = Group.query.get_or_404(group_id)
+    group = db.select(Group).get_or_404(group_id)
 
     # Security check: Only the creator can delete the group
     if current_user.id != group.created_by:
@@ -159,7 +162,7 @@ def delete_group(group_id):
     # GET request shows confirmation prompt, POST actually deletes
     if request.method == "GET":
         # Count associated expenses
-        expense_count = Expense.query.filter_by(group_id=group_id).count()
+        expense_count = db.select(Expense).filter_by(group_id=group_id).count()
         # Set up session data for confirmation
         session["delete_group_id"] = group_id
         session["delete_group_name"] = group.name
@@ -179,7 +182,7 @@ def delete_group(group_id):
         expense_count = session.get("delete_group_expense_count", 0)
 
         # Delete associated expenses first
-        Expense.query.filter_by(group_id=group_id).delete()
+        db.select(Expense).filter_by(group_id=group_id).delete()
 
         # Delete the group
         db.session.delete(group)

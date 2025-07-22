@@ -1,5 +1,4 @@
-from datetime import datetime
-from datetime import timezone as tz
+from datetime import UTC, datetime
 
 from flask import (
     Blueprint,
@@ -113,7 +112,7 @@ def update_currency(code):
             curr.is_base = False
 
     currency.is_base = new_is_base
-    currency.last_updated = datetime.now(tz.utc)
+    currency.last_updated = datetime.now(UTC)
 
     try:
         db.session.commit()

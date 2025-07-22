@@ -1,5 +1,6 @@
+import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from logging import Logger
 
 from flask import (
@@ -35,8 +36,6 @@ demo_bp = Blueprint("demo", __name__)
 @demo_bp.route("/")
 def login() -> str | Response:
     """Auto-login as demo user with session timeout."""
-    import logging
-
     logger: Logger = logging.getLogger(__name__)
 
     # Check if demo mode is enabled
@@ -101,9 +100,9 @@ def login() -> str | Response:
 
     # Set demo start time and expiry time
     demo_timeout_minutes = int(os.getenv("DEMO_TIMEOUT_MINUTES", "10"))
-    session["demo_start_time"] = datetime.now(timezone.utc).timestamp()
+    session["demo_start_time"] = datetime.now(UTC).timestamp()
     session["demo_expiry_time"] = (
-        datetime.now(timezone.utc) + timedelta(minutes=demo_timeout_minutes)
+        datetime.now(UTC) + timedelta(minutes=demo_timeout_minutes)
     ).timestamp()
 
     flash(
@@ -132,11 +131,8 @@ def demo_thanks() -> str:
 
 
 # Demo data creation function
-def create_demo_data(user_id) -> bool:  # noqa: C901, PLR0912, PLR0915
+def create_demo_data(user_id) -> bool:  # noqa: PLR0915
     """Create comprehensive sample data for demo users with proper checking."""
-    import logging
-    from datetime import datetime, timedelta
-
     logger: Logger = logging.getLogger(__name__)
     logger.info("Starting demo data creation for user %s", {user_id})
 
@@ -260,7 +256,7 @@ def create_demo_data(user_id) -> bool:  # noqa: C901, PLR0912, PLR0915
         expense1 = Expense(
             description="Grocery shopping",
             amount=125.75,
-            date=datetime.now(timezone.utc),
+            date=datetime.now(UTC),
             card_used="Demo Credit Card",
             split_method="equal",
             paid_by=user_id,
@@ -282,7 +278,7 @@ def create_demo_data(user_id) -> bool:  # noqa: C901, PLR0912, PLR0915
         expense2 = Expense(
             description="Monthly rent",
             amount=1200.00,
-            date=datetime.now(timezone.utc) - timedelta(days=7),
+            date=datetime.now(UTC) - timedelta(days=7),
             card_used="Demo Checking",
             split_method="equal",
             paid_by=user_id,
@@ -305,7 +301,7 @@ def create_demo_data(user_id) -> bool:  # noqa: C901, PLR0912, PLR0915
         income1 = Expense(
             description="Salary deposit",
             amount=3500.00,
-            date=datetime.now(timezone.utc) - timedelta(days=15),
+            date=datetime.now(UTC) - timedelta(days=15),
             card_used="Direct Deposit",
             split_method="equal",
             paid_by=user_id,
@@ -327,7 +323,7 @@ def create_demo_data(user_id) -> bool:  # noqa: C901, PLR0912, PLR0915
         income2 = Expense(
             description="Side gig payment",
             amount=250.00,
-            date=datetime.now(timezone.utc) - timedelta(days=8),
+            date=datetime.now(UTC) - timedelta(days=8),
             card_used="PayPal",
             split_method="equal",
             paid_by=user_id,
@@ -364,7 +360,7 @@ def create_demo_data(user_id) -> bool:  # noqa: C901, PLR0912, PLR0915
         split_expense1 = Expense(
             description="Shopping trip (mixed)",
             amount=183.50,
-            date=datetime.now(timezone.utc) - timedelta(days=3),
+            date=datetime.now(UTC) - timedelta(days=3),
             card_used="Demo Credit Card",
             split_method="equal",
             paid_by=user_id,
@@ -419,7 +415,7 @@ def create_demo_data(user_id) -> bool:  # noqa: C901, PLR0912, PLR0915
         split_expense2 = Expense(
             description="Weekend trip expenses",
             amount=342.75,
-            date=datetime.now(timezone.utc) - timedelta(days=14),
+            date=datetime.now(UTC) - timedelta(days=14),
             card_used="Demo Credit Card",
             split_method="equal",
             paid_by=user_id,
@@ -473,7 +469,7 @@ def create_demo_data(user_id) -> bool:  # noqa: C901, PLR0912, PLR0915
         transfer1 = Expense(
             description="Transfer to savings",
             amount=500.00,
-            date=datetime.now(timezone.utc) - timedelta(days=10),
+            date=datetime.now(UTC) - timedelta(days=10),
             card_used="Internal Transfer",
             split_method="equal",
             paid_by=user_id,
@@ -496,7 +492,7 @@ def create_demo_data(user_id) -> bool:  # noqa: C901, PLR0912, PLR0915
         transfer2 = Expense(
             description="Credit card payment",
             amount=750.00,
-            date=datetime.now(timezone.utc) - timedelta(days=12),
+            date=datetime.now(UTC) - timedelta(days=12),
             card_used="Internal Transfer",
             split_method="equal",
             paid_by=user_id,
@@ -519,7 +515,7 @@ def create_demo_data(user_id) -> bool:  # noqa: C901, PLR0912, PLR0915
         transfer3 = Expense(
             description="Investment contribution",
             amount=1000.00,
-            date=datetime.now(timezone.utc) - timedelta(days=20),
+            date=datetime.now(UTC) - timedelta(days=20),
             card_used="Internal Transfer",
             split_method="equal",
             paid_by=user_id,
@@ -552,7 +548,7 @@ def create_demo_data(user_id) -> bool:  # noqa: C901, PLR0912, PLR0915
             if entertainment_category
             else None,
             frequency="monthly",
-            start_date=datetime.now(timezone.utc) - timedelta(days=30),
+            start_date=datetime.now(UTC) - timedelta(days=30),
             active=True,
             account_id=credit.id,
         )
@@ -574,7 +570,7 @@ def create_demo_data(user_id) -> bool:  # noqa: C901, PLR0912, PLR0915
             user_id=user_id,
             category_id=housing_category.id if housing_category else None,
             frequency="monthly",
-            start_date=datetime.now(timezone.utc) - timedelta(days=15),
+            start_date=datetime.now(UTC) - timedelta(days=15),
             active=True,
             account_id=checking.id,
         )
@@ -595,7 +591,7 @@ def create_demo_data(user_id) -> bool:  # noqa: C901, PLR0912, PLR0915
             amount=600.00,
             period="monthly",
             include_subcategories=True,
-            start_date=datetime.now(timezone.utc).replace(day=1),
+            start_date=datetime.now(UTC).replace(day=1),
             is_recurring=True,
             active=True,
         )
@@ -615,7 +611,7 @@ def create_demo_data(user_id) -> bool:  # noqa: C901, PLR0912, PLR0915
             amount=300.00,
             period="monthly",
             include_subcategories=True,
-            start_date=datetime.now(timezone.utc).replace(day=1),
+            start_date=datetime.now(UTC).replace(day=1),
             is_recurring=True,
             active=True,
         )
@@ -635,7 +631,7 @@ def create_demo_data(user_id) -> bool:  # noqa: C901, PLR0912, PLR0915
             amount=200.00,
             period="monthly",
             include_subcategories=True,
-            start_date=datetime.now(timezone.utc).replace(day=1),
+            start_date=datetime.now(UTC).replace(day=1),
             is_recurring=True,
             active=True,
         )
