@@ -1,4 +1,9 @@
-<div class="tab-pane fade" id="gocardless" role="tabpanel" aria-labelledby="gocardless-tab">
+<div
+    class="tab-pane fade"
+    id="gocardless"
+    role="tabpanel"
+    aria-labelledby="gocardless-tab"
+>
     <div class="card">
         <div class="card-header">
             <h5 class="mb-0">Connect with GoCardless</h5>
@@ -6,24 +11,42 @@
         <div class="card-body">
             <div class="mb-4">
                 <h5>What is GoCardless?</h5>
-                <p>GoCardless is a secure way to connect to your bank accounts. It provides a standardized API that
-                    allows Dollar Dollar Bill Y'all to access your financial data without storing your bank credentials.
+                <p>
+                    GoCardless is a secure way to connect to your bank accounts.
+                    It provides a standardized API that allows Dollar Dollar
+                    Bill Y'all to access your financial data without storing
+                    your bank credentials.
                 </p>
                 <div class="alert alert-info">
                     <i class="fas fa-shield-alt me-2"></i>
-                    GoCardless never shares your bank credentials with us. We only receive the transaction data you
-                    authorize.
+                    GoCardless never shares your bank credentials with us. We
+                    only receive the transaction data you authorize.
                 </div>
             </div>
 
             <div class="mb-4">
                 <h5>How to Connect</h5>
                 <ol>
-                    <li>Click the "Get GoCardless Secret Tokens" button below</li>
-                    <li>You'll be redirected to GoCardless to create a new account</li>
-                    <li>Retrieve the secret id and secret key from your user from this <a
-                            href="https://bankaccountdata.gocardless.com/user-secrets/" target="_blank">link</a></li>
-                    <li>Paste the secret id and secret key in their respective fields</li>
+                    <li>
+                        Click the "Get GoCardless Secret Tokens" button below
+                    </li>
+                    <li>
+                        You'll be redirected to GoCardless to create a new
+                        account
+                    </li>
+                    <li>
+                        Retrieve the secret id and secret key from your user
+                        from this
+                        <a
+                            href="https://bankaccountdata.gocardless.com/user-secrets/"
+                            target="_blank"
+                            >link</a
+                        >
+                    </li>
+                    <li>
+                        Paste the secret id and secret key in their respective
+                        fields
+                    </li>
                     <li>Click "Connect" to retrieve an access token</li>
                     <li>Select your bank in the selection menu</li>
                 </ol>
@@ -35,39 +58,78 @@
                     <h6 class="mb-0">GoCardless Connection</h6>
                 </div>
                 <div class="card-body">
-                    {% if current_user.simplefin_settings and current_user.simplefin_settings.enabled %}
+                    {% if current_user.simplefin_settings and
+                    current_user.simplefin_settings.enabled %}
                     <div class="alert alert-success">
                         <i class="fas fa-check-circle me-2"></i>
                         <strong>Connected to SimpleFin!</strong>
-                        <p class="mb-0">Last synced: {{ current_user.simplefin_settings.last_sync.strftime('%Y-%m-%d
-                            %H:%M') if current_user.simplefin_settings.last_sync else "Never" }}</p>
-                        <p class="mb-0">Sync frequency: {{ current_user.simplefin_settings.sync_frequency|capitalize }}
+                        <p class="mb-0">
+                            Last synced: {{
+                            current_user.simplefin_settings.last_sync.strftime('%Y-%m-%d
+                            %H:%M') if current_user.simplefin_settings.last_sync
+                            else "Never" }}
+                        </p>
+                        <p class="mb-0">
+                            Sync frequency: {{
+                            current_user.simplefin_settings.sync_frequency|capitalize
+                            }}
                         </p>
                     </div>
                     <div class="d-flex justify-content-between">
-                        <button class="btn btn-outline-primary" id="refreshSimpleFin">
-                            <i class="fas fa-sync-alt me-1"></i> Refresh Connection
+                        <button
+                            class="btn btn-outline-primary"
+                            id="refreshSimpleFin"
+                        >
+                            <i class="fas fa-sync-alt me-1"></i> Refresh
+                            Connection
                         </button>
-                        <button class="btn btn-outline-danger" id="disconnectSimpleFin">
+                        <button
+                            class="btn btn-outline-danger"
+                            id="disconnectSimpleFin"
+                        >
                             <i class="fas fa-unlink me-1"></i> Disconnect
                         </button>
                     </div>
                     {% else %}
                     <div class="d-flex justify-content-center mb-3">
-                        <a href="{{ url_for('gocardless.connect') }}" class="btn btn-primary btn-lg" target="_blank">
-                            <i class="fas fa-key me-2"></i>Get GoCardless secret tokens
+                        <a
+                            href="{{ url_for('simplefin.connect_simplefin') }}"
+                            class="btn btn-primary btn-lg"
+                            target="_blank"
+                        >
+                            <i class="fas fa-key me-2"></i>Get GoCardless secret
+                            tokens
                         </a>
                     </div>
 
-                    <form method="POST" action="{{ url_for('gocardless.process_token') }}">
+                    <form
+                        method="POST"
+                        action="{{ url_for('simplefin.process_simplefin_token') }}"
+                    >
                         <div class="mb-3">
-                            <label for="secret_id" class="form-label">Enter your GoCardless secret id</label>
-                            <input type="text" class="form-control bg-dark text-light" id="secret_id" name="secret_id"
-                                placeholder="Paste your secret id here" required>
-                            <br>
-                            <label for="secret_key" class="form-label">Enter your GoCardless secret key</label>
-                            <input type="text" class="form-control bg-dark text-light" id="secret_key" name="secret_key"
-                                placeholder="Paste your secret key here" required>
+                            <label for="secret_id" class="form-label"
+                                >Enter your GoCardless secret id</label
+                            >
+                            <input
+                                type="text"
+                                class="form-control bg-dark text-light"
+                                id="secret_id"
+                                name="secret_id"
+                                placeholder="Paste your secret id here"
+                                required
+                            />
+                            <br />
+                            <label for="secret_key" class="form-label"
+                                >Enter your GoCardless secret key</label
+                            >
+                            <input
+                                type="text"
+                                class="form-control bg-dark text-light"
+                                id="secret_key"
+                                name="secret_key"
+                                placeholder="Paste your secret key here"
+                                required
+                            />
                         </div>
                         <div class="text-center">
                             <button type="submit" class="btn btn-success">
@@ -98,21 +160,28 @@
                             <tr>
                                 <td>{{ account.institution }}</td>
                                 <td>{{ account.name }}</td>
-                                <td>{{ account.last_sync.strftime('%Y-%m-%d %H:%M') if account.last_sync else "Never" }}
+                                <td>
+                                    {{ account.last_sync.strftime('%Y-%m-%d
+                                    %H:%M') if account.last_sync else "Never" }}
                                 </td>
                                 <td>
                                     <span
-                                        class="badge {% if account.status == 'active' %}bg-success{% else %}bg-warning{% endif %}">
+                                        class="badge {% if account.status == 'active' %}bg-success{% else %}bg-warning{% endif %}"
+                                    >
                                         {{ account.status|capitalize }}
                                     </span>
                                 </td>
                                 <td>
-                                    <button class="btn btn-sm btn-outline-primary"
-                                        onclick="syncAccount({{ account.id }})">
+                                    <button
+                                        class="btn btn-sm btn-outline-primary"
+                                        onclick="syncAccount({{ account.id }})"
+                                    >
                                         <i class="fas fa-sync-alt"></i> Sync
                                     </button>
-                                    <button class="btn btn-sm btn-outline-danger"
-                                        onclick="disconnectAccount({{ account.id }})">
+                                    <button
+                                        class="btn btn-sm btn-outline-danger"
+                                        onclick="disconnectAccount({{ account.id }})"
+                                    >
                                         <i class="fas fa-unlink"></i> Disconnect
                                     </button>
                                 </td>
