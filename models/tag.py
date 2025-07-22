@@ -1,5 +1,4 @@
-from datetime import datetime
-from datetime import timezone as tz
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import ForeignKey, String
@@ -36,7 +35,7 @@ class Tag(Base):
         String(20), default="#6c757d"
     )  # Default color gray
 
-    created_at: Mapped[datetime] = mapped_column(default=datetime.now(tz.utc))
+    created_at: Mapped[datetime] = mapped_column(default=datetime.now(UTC))
 
     expenses: Mapped[list["Expense"]] = relationship(
         "Expense",

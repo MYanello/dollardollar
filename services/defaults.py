@@ -1,5 +1,4 @@
-from datetime import datetime
-from datetime import timezone as tz
+from datetime import UTC, datetime
 
 from flask import current_app
 
@@ -157,7 +156,7 @@ def create_default_categories(user_id):
     create_default_category_mappings(user_id)
 
 
-def create_default_budgets(user_id):  # noqa: C901 PLR0912
+def create_default_budgets(user_id):
     """Create default budget templates for a new user.
 
     All deactivated by default.
@@ -305,11 +304,11 @@ def create_default_budgets(user_id):  # noqa: C901 PLR0912
                 include_subcategories=budget_template.get(
                     "include_subcategories", True
                 ),
-                start_date=datetime.now(tz.utc),
+                start_date=datetime.now(UTC),
                 is_recurring=True,
                 active=False,  # Deactivated by default
-                created_at=datetime.now(tz.utc),
-                updated_at=datetime.now(tz.utc),
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
             )
 
             db.session.add(new_budget)

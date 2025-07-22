@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from datetime import timezone as tz
 from typing import TYPE_CHECKING, ClassVar
 
@@ -41,7 +41,7 @@ class Group(Base):
         lazy=True,
         default_factory=list,
     )
-    created_at: Mapped[datetime] = mapped_column(default=datetime.now(tz.utc))
+    created_at: Mapped[datetime] = mapped_column(default=datetime.now(UTC))
 
     creator: Mapped["User"] = relationship(
         "User",

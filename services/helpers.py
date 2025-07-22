@@ -1,5 +1,5 @@
 import base64
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from logging import Logger
 
 from flask import current_app, request
@@ -28,8 +28,8 @@ from tables import expense_tags
 
 
 def get_category_spending(expenses, expense_splits):
-    current_month = datetime.now().month
-    current_year = datetime.now().year
+    current_month = datetime.now(UTC).month
+    current_year = datetime.now(UTC).year
 
     category_totals = {}
 
@@ -149,7 +149,7 @@ def get_base_currency():
     }
 
 
-def calculate_balances(user_id):  # noqa: C901 PLR0912
+def calculate_balances(user_id):
     """Calculate balances between the current user and all other users."""
     balances = {}
 
@@ -329,7 +329,7 @@ def get_budget_summary():
     return budget_summary
 
 
-def calculate_asset_debt_trends(current_user):  # noqa: C901 PLR0912
+def calculate_asset_debt_trends(current_user):
     """Calculate asset and debt trends for a user's accounts."""
     # Initialize tracking
     monthly_assets = {}
@@ -642,7 +642,7 @@ def get_category_id(category_name, description=None, user_id=None):  # noqa: PLR
     return None
 
 
-def auto_categorize_transaction(description, user_id):  # noqa: C901
+def auto_categorize_transaction(description, user_id):
     """Automatically categorize a transaction based on its description.
 
     :return: the best matching category ID or None if no match found
@@ -1068,7 +1068,6 @@ def calculate_category_spending(
     category_id, start_date, end_date, include_subcategories=True
 ):
     """Calculate total spending for a category within a date range"""
-
     # Get the category
     category = Category.query.get(category_id)
     if not category:
@@ -1202,4 +1201,4 @@ def init_default_currencies():
             print("Default currencies initialized")
         except Exception as e:
             db.session.rollback()
-            print(f"Error initializing currencies: {str(e)}")
+            print(f"Error initializing currencies: {e!s}")

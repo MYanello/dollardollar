@@ -1,6 +1,5 @@
-from datetime import datetime
-from datetime import timezone as tz
-from typing import TYPE_CHECKING, Optional
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -29,9 +28,9 @@ class SimpleFinSettings(Base):
     )  # 'daily', 'weekly', etc.
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        default=datetime.now(tz.utc), onupdate=datetime.now(tz.utc)
+        default=datetime.now(UTC), onupdate=datetime.now(UTC)
     )
-    temp_accounts: Mapped[Optional[str]] = mapped_column(default=None)
+    temp_accounts: Mapped[str | None] = mapped_column(default=None)
     # Relationship with User
     user: Mapped["User"] = relationship(
         "User", back_populates="simplefin", uselist=False, lazy=True, init=False

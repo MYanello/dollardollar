@@ -1,9 +1,12 @@
 import threading
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from functools import wraps
 
+from flask import current_app as app
 from flask import flash, redirect, request, session, url_for
 from flask_login import current_user, logout_user
+
+from services.helpers import reset_demo_data
 
 
 class DemoTimeout:
@@ -59,14 +62,14 @@ class DemoTimeout:
         """Register a new demo session, return True if successful."""
         with self._session_lock:
             # Clean up expired sessions first
-            current_time: datetime = datetime.now(timezone.utc)
+            current_time: datetime = datetime.now(UTC)
 
             # Remove expired sessions
             self._active_demo_sessions = {
                 uid: session_data
                 for uid, session_data in self._active_demo_sessions.items()
                 if current_time
-                < datetime.fromtimestamp(session_data["start_time"])
+                < datetime.fromtimestamp(session_data["start_time"], tz=UTC)
                 + timedelta(minutes=self.timeout_minutes)
             }
 
@@ -76,7 +79,7 @@ class DemoTimeout:
 
             # Register new session
             self._active_demo_sessions[user_id] = {
-                "start_time": datetime.now(timezone.utc).timestamp(),
+                "start_time": datetime.now(UTC).timestamp(),
                 "ip_address": request.remote_addr,
             }
             return True
@@ -91,12 +94,12 @@ class DemoTimeout:
         """Get the number of currently active demo sessions."""
         with self._session_lock:
             # Clean up expired sessions first
-            current_time: datetime = datetime.now(timezone.utc)
+            current_time: datetime = datetime.now(UTC)
             self._active_demo_sessions = {
                 uid: session_data
                 for uid, session_data in self._active_demo_sessions.items()
                 if current_time
-                < datetime.fromtimestamp(session_data["start_time"])
+                < datetime.fromtimestamp(session_data["start_time"], tz=UTC)
                 + timedelta(minutes=self.timeout_minutes)
             }
             return len(self._active_demo_sessions)
@@ -112,24 +115,17 @@ class DemoTimeout:
         ):
             # Check if session start time exists
             if "demo_start_time" not in session:
-                session["demo_start_time"] = datetime.now(
-                    timezone.utc
-                ).timestamp()
+                session["demo_start_time"] = datetime.now(UTC).timestamp()
 
             # Check if session has expired
             start_time: datetime = datetime.fromtimestamp(
-                session["demo_start_time"], tz=timezone.utc
+                session["demo_start_time"], tz=UTC
             )
-            if datetime.now(timezone.utc) > start_time + timedelta(
+            if datetime.now(UTC) > start_time + timedelta(
                 minutes=self.timeout_minutes
             ):
                 # Session expired, clean up
                 self.unregister_demo_session(current_user.id)
-
-                # Reset demo data
-                from services.helpers import (
-                    reset_demo_data,
-                )  # Import reset function
 
                 reset_demo_data(current_user.id)
 
@@ -153,7 +149,7 @@ class DemoTimeout:
                 # Handle detached user case
                 return response
         if current_user.is_authenticated and self.is_demo_user(current_user.id):
-            session["last_active"] = datetime.now(timezone.utc).timestamp()
+            session["last_active"] = datetime.now(UTC).timestamp()
         return response
 
     def is_demo_user(self, user_id):
@@ -181,14 +177,12 @@ class DemoTimeout:
             return self.timeout_minutes * 60
 
         start_time: datetime = datetime.fromtimestamp(
-            session["demo_start_time"], tz=timezone.utc
+            session["demo_start_time"], tz=UTC
         )
         end_time: datetime = start_time + timedelta(
             minutes=self.timeout_minutes
         )
-        remaining: float = (
-            end_time - datetime.now(timezone.utc)
-        ).total_seconds()
+        remaining: float = (end_time - datetime.now(UTC)).total_seconds()
 
         return max(0, int(remaining))
 
@@ -199,29 +193,24 @@ def demo_time_limited(f):
     def decorated_function(*args, **kwargs):
         # If user is a demo user and session is expired, redirect to login
         if current_user.is_authenticated and hasattr(current_user, "id"):
-            from flask import current_app
-
-            demo_timeout: DemoTimeout | None = current_app.extensions.get(
+            demo_timeout: DemoTimeout | None = app.extensions.get(
                 "demo_timeout"
             )
 
             if demo_timeout and demo_timeout.is_demo_user(current_user.id):
                 # Get demo timeout from app config
                 timeout_minutes = int(
-                    current_app.config.get("DEMO_TIMEOUT_MINUTES", "10")
+                    app.config.get("DEMO_TIMEOUT_MINUTES", "10")
                 )
 
                 # Check if session has expired
                 if "demo_start_time" in session:
                     start_time: datetime = datetime.fromtimestamp(
-                        session["demo_start_time"], tz=timezone.utc
+                        session["demo_start_time"], tz=UTC
                     )
-                    if datetime.now(timezone.utc) > start_time + timedelta(
+                    if datetime.now(UTC) > start_time + timedelta(
                         minutes=timeout_minutes
                     ):
-                        # Reset demo data
-                        from services.helpers import reset_demo_data
-
                         reset_demo_data(current_user.id)
 
                         # Log out user

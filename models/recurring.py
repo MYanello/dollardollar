@@ -1,5 +1,4 @@
-from datetime import datetime
-from datetime import timezone as tz
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, ClassVar, Optional
 
 from sqlalchemy import ForeignKey, String, Text, UniqueConstraint
@@ -41,22 +40,22 @@ class RecurringExpense(Base):
     )  # 'daily', 'weekly', 'monthly', 'yearly'
     start_date: Mapped[datetime] = mapped_column(nullable=False)
 
-    group_id: Mapped[Optional[int]] = mapped_column(
+    group_id: Mapped[int | None] = mapped_column(
         ForeignKey("groups.id"), default=None
     )
-    split_with: Mapped[Optional[str]] = mapped_column(
+    split_with: Mapped[str | None] = mapped_column(
         String(500), default=None
     )  # Comma-separated list of user IDs
 
-    split_value: Mapped[Optional[float]] = mapped_column(default=None)
-    split_details: Mapped[Optional[str]] = mapped_column(
+    split_value: Mapped[float | None] = mapped_column(default=None)
+    split_details: Mapped[str | None] = mapped_column(
         Text, default=None
     )  # JSON string
 
-    end_date: Mapped[Optional[datetime]] = mapped_column(
+    end_date: Mapped[datetime | None] = mapped_column(
         default=None
     )  # Optional end date
-    last_created: Mapped[Optional[datetime]] = mapped_column(
+    last_created: Mapped[datetime | None] = mapped_column(
         default=None
     )  # Track last created instance
 
@@ -74,22 +73,22 @@ class RecurringExpense(Base):
         foreign_keys="Expense.recurring_id",
         default_factory=list,
     )
-    currency_code: Mapped[Optional[str]] = mapped_column(
+    currency_code: Mapped[str | None] = mapped_column(
         String(3), ForeignKey("currencies.code"), default=None
     )
-    original_amount: Mapped[Optional[float]] = mapped_column(
+    original_amount: Mapped[float | None] = mapped_column(
         default=None
     )  # Amount in original currency
     currency: Mapped[Optional["Currency"]] = relationship(
         "Currency", back_populates="recurring_expenses", lazy=True, init=False
     )
-    category_id: Mapped[Optional[int]] = mapped_column(
+    category_id: Mapped[int | None] = mapped_column(
         ForeignKey("categories.id"), default=None
     )
     category: Mapped[Optional["Category"]] = relationship(
         "Category", back_populates="recurring_expenses", lazy=True, init=False
     )
-    account_id: Mapped[Optional[int]] = mapped_column(
+    account_id: Mapped[int | None] = mapped_column(
         ForeignKey("accounts.id", name="fk_recurring_account"),
         default=None,
     )
@@ -102,7 +101,7 @@ class RecurringExpense(Base):
     )
 
     # For transfers
-    destination_account_id: Mapped[Optional[int]] = mapped_column(
+    destination_account_id: Mapped[int | None] = mapped_column(
         ForeignKey("accounts.id", name="fk_recurring_destination"), default=None
     )
     destination_account: Mapped[Optional["Account"]] = relationship(
@@ -121,7 +120,7 @@ class RecurringExpense(Base):
     def create_expense_instance(self, for_date: datetime | None = None):
         """Create a single expense instance from this recurring template."""
         if for_date is None:
-            for_date = datetime.now(tz.utc)
+            for_date = datetime.now(UTC)
         # Copy data to create a new expense
         expense: Any = Expense(
             description=self.description,
@@ -169,7 +168,7 @@ class IgnoredRecurringPattern(Base):
     amount: Mapped[float] = mapped_column(nullable=False)
     frequency: Mapped[str] = mapped_column(String(20), nullable=False)
     ignore_date: Mapped[datetime] = mapped_column(
-        nullable=False, default=datetime.now(tz.utc)
+        nullable=False, default=datetime.now(UTC)
     )
 
     # Relationship with User
