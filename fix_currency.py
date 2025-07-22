@@ -6,7 +6,7 @@ from models import Currency
 with current_app.app_context():
     # Find the base currency
     base_currency: Currency | None = (
-        db.select(Currency).filter_by(is_base=True).first()
+        db.session.query(Currency).filter_by(is_base=True).first()
     )
 
     if base_currency:

@@ -31,7 +31,7 @@ def get_transaction_details(other_user_id):
     """Fetch transaction details between current user and another user."""
     # Query expenses involving both users
     expenses = (
-        db.select(Expense)
+        db.session.query(Expense)
         .filter(
             or_(
                 and_(
@@ -51,7 +51,7 @@ def get_transaction_details(other_user_id):
 
     # Query settlements between both users
     settlements = (
-        db.select(Settlement)
+        db.session.query(Settlement)
         .filter(
             or_(
                 and_(
@@ -95,10 +95,10 @@ def get_transaction_details(other_user_id):
                     "date": settlement.date.strftime("%Y-%m-%d"),
                     "description": settlement.description,
                     "amount": settlement.amount,
-                    "payer": db.select(User)
+                    "payer": db.session.query(User)
                     .get(settlement.payer_id)
                     .name,
-                    "receiver": db.select(User)
+                    "receiver": db.session.query(User)
                     .get(settlement.receiver_id)
                     .name,
                 }
@@ -120,7 +120,7 @@ def transactions():  # noqa: PLR0915
     # or a split participant
     base_currency = get_base_currency()
     expenses = (
-        db.select(Expense)
+        db.session.query(Expense)
         .filter(
             or_(
                 Expense.user_id == current_user.id,
@@ -131,7 +131,7 @@ def transactions():  # noqa: PLR0915
         .all()
     )
 
-    users = db.select(User).all()
+    users = db.session.query(User).all()
 
     # Pre-calculate all expense splits to avoid repeated calculations
     expense_splits = {}
@@ -194,7 +194,7 @@ def transactions():  # noqa: PLR0915
     monthly_totals = {}
     unique_cards = set()
 
-    currencies = db.select(Currency).all()
+    currencies = db.session.query(Currency).all()
     for expense in expenses:
         month_key = expense.date.strftime("%Y-%m")
         if month_key not in monthly_totals:
@@ -258,21 +258,21 @@ def transactions():  # noqa: PLR0915
 def get_transaction_form_html():
     """Return the HTML for the add transaction form."""
     base_currency = get_base_currency()
-    users = db.select(User).all()
+    users = db.session.query(User).all()
     groups = (
-        db.select(Group)
+        db.session.query(Group)
         .join(group_users)
         .filter(group_users.c.user_id == current_user.id)
         .all()
     )
     categories = (
-        db.select(Category)
+        db.session.query(Category)
         .filter_by(user_id=current_user.id)
         .order_by(Category.name)
         .all()
     )
-    currencies = db.select(Currency).all()
-    tags = db.select(Tag).filter_by(user_id=current_user.id).all()
+    currencies = db.session.query(Currency).all()
+    tags = db.session.query(Tag).filter_by(user_id=current_user.id).all()
     return render_template(
         "partials/add_transaction_form.html",
         users=users,
@@ -288,7 +288,7 @@ def get_transaction_form_html():
 @login_required_dev
 def get_expense_edit_form(expense_id):
     """Return the HTML for editing an expense, including category split data."""
-    expense = db.select(Expense).get(expense_id)
+    expense = db.session.query(Expense).get(expense_id)
 
     # Security check
     if expense.user_id != current_user.id and current_user.id not in (
@@ -301,7 +301,7 @@ def get_expense_edit_form(expense_id):
     if expense.has_category_splits:
         # Get all category splits for this expense
         splits = (
-            db.select(CategorySplit)
+            db.session.query(CategorySplit)
             .filter_by(expense_id=expense.id)
             .all()
         )
@@ -316,23 +316,23 @@ def get_expense_edit_form(expense_id):
     )
 
     base_currency = get_base_currency()
-    users = db.select(User).all()
+    users = db.session.query(User).all()
     groups = (
-        db.select(Group)
+        db.session.query(Group)
         .join(group_users)
         .filter(group_users.c.user_id == current_user.id)
         .all()
     )
     categories = (
-        db.select(Category)
+        db.session.query(Category)
         .filter_by(user_id=current_user.id)
         .order_by(Category.name)
         .all()
     )
-    currencies = db.select(Currency).all()
+    currencies = db.session.query(Currency).all()
 
     accounts = (
-        db.select(Account).filter_by(user_id=current_user.id).all()
+        db.session.query(Account).filter_by(user_id=current_user.id).all()
     )
     return render_template(
         "partials/edit_transaction_form.html",

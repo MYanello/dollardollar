@@ -80,7 +80,7 @@ def process_token() -> Response:
     try:
         # Check if a GoCardless settings record already exists for this user
         gocardless_settings: GoCardlessSettings | None = (
-            db.select(GoCardlessSettings)
+            db.session.query(GoCardlessSettings)
             .filter_by(user_id=current_user.id)
             .first()
         )
@@ -140,7 +140,7 @@ def choose_bank() -> Response | str:
         flash("GoCardless is not enabled.", "error")
         return redirect(url_for("account.advanced"))
     settings: GoCardlessSettings | None = (
-        db.select(GoCardlessSettings)
+        db.session.query(GoCardlessSettings)
         .filter_by(user_id=current_user.id)
         .first()
     )
@@ -180,7 +180,7 @@ def process_bank() -> Response | str:
         flash("GoCardless is not enabled.", "error")
         return redirect(url_for("account.advanced"))
     settings: GoCardlessSettings | None = (
-        db.select(GoCardlessSettings)
+        db.session.query(GoCardlessSettings)
         .filter_by(user_id=current_user.id)
         .first()
     )
@@ -239,7 +239,7 @@ def list_accounts() -> Response | str:
         flash("GoCardless is not enabled.", "error")
         return redirect(url_for("account.advanced"))
     settings: GoCardlessSettings | None = (
-        db.select(GoCardlessSettings)
+        db.session.query(GoCardlessSettings)
         .filter_by(user_id=current_user.id)
         .first()
     )
@@ -247,7 +247,7 @@ def list_accounts() -> Response | str:
         flash("No GoCardless connection found.", "error")
         return redirect(url_for("account.advanced"))
     requisitions: list[Requisition] = (
-        db.select(Requisition)
+        db.session.query(Requisition)
         .filter_by(user_id=current_user.id)
         .join(Requisition.agreement)
         .order_by(Agreement.created_at.desc())
@@ -284,7 +284,7 @@ def customize_accounts() -> Response | str:
         flash("GoCardless is not enabled.", "error")
         return redirect(url_for("account.advanced"))
     settings: GoCardlessSettings | None = (
-        db.select(GoCardlessSettings)
+        db.session.query(GoCardlessSettings)
         .filter_by(user_id=current_user.id)
         .first()
     )
@@ -297,7 +297,7 @@ def customize_accounts() -> Response | str:
         flash("No accounts were selected.", "error")
         return redirect(url_for("account.advanced"))
 
-    currencies: list[Currency] = db.select(Currency).all()
+    currencies: list[Currency] = db.session.query(Currency).all()
     institutions = {}
     account_details: dict[str, Any] = {}
     for account in accounts:
@@ -327,7 +327,7 @@ def add_accounts() -> Response | str:
         flash("GoCardless is not enabled.", "error")
         return redirect(url_for("account.advanced"))
     settings: GoCardlessSettings | None = (
-        db.select(GoCardlessSettings)
+        db.session.query(GoCardlessSettings)
         .filter_by(user_id=current_user.id)
         .first()
     )
@@ -383,7 +383,7 @@ def add_accounts() -> Response | str:
         ]["booked"]
         current_app.logger.info(all_transactions)
         existing_account: Account | None = (
-            db.select(Account)
+            db.session.query(Account)
             .filter_by(
                 user_id=current_user.id,
                 name=name,
@@ -426,7 +426,7 @@ def add_accounts() -> Response | str:
         )
         for transaction in transactions:
             existing: Expense | None = (
-                db.select(Expense)
+                db.session.query(Expense)
                 .filter_by(
                     user_id=current_user.id,
                     external_id=transaction.external_id,

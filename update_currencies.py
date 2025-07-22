@@ -18,7 +18,7 @@ def update_currency_rates() -> int:
     try:
         # Find the base currency
         base_currency: Currency | None = (
-            db.select(Currency).filter_by(is_base=True).first()
+            db.session.query(Currency).filter_by(is_base=True).first()
         )
 
         if not base_currency:
@@ -60,7 +60,7 @@ def update_currency_rates() -> int:
 
         # Get all currencies except base
         currencies: list[Currency] = (
-            db.select(Currency).filter(Currency.code != base_code).all()
+            db.session.query(Currency).filter(Currency.code != base_code).all()
         )
         updated_count = 0
 

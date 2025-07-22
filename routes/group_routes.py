@@ -26,12 +26,12 @@ group_bp = Blueprint("group", __name__)
 @login_required_dev
 def groups():
     groups = (
-        db.select(Group)
+        db.session.query(Group)
         .join(group_users)
         .filter(group_users.c.user_id == current_user.id)
         .all()
     )
-    all_users = db.select(User).all()
+    all_users = db.session.query(User).all()
     return render_template("groups.html", groups=groups, users=all_users)
 
 
@@ -52,7 +52,7 @@ def create_group():
 
         # Add selected members
         for member_id in member_ids:
-            user = db.select(User).filter_by(id=member_id).first()
+            user = db.session.query(User).filter_by(id=member_id).first()
             if user and user != current_user:
                 group.members.append(user)
 

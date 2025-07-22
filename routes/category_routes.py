@@ -45,7 +45,7 @@ category_bp = Blueprint("category", __name__)
 def get_category_splits(expense_id) -> tuple[Response, int]:
     """Get category splits for an expense."""
     try:
-        expense: Expense | None = db.select(Expense).get(expense_id)
+        expense: Expense | None = db.session.query(Expense).get(expense_id)
         if not expense:
             abort(404)
 
@@ -63,7 +63,7 @@ def get_category_splits(expense_id) -> tuple[Response, int]:
 
         # Get all category splits for this expense
         splits = (
-            db.select(CategorySplit)
+            db.session.query(CategorySplit)
             .filter_by(expense_id=expense_id)
             .all()
         )
@@ -71,7 +71,7 @@ def get_category_splits(expense_id) -> tuple[Response, int]:
         # Format the response
         splits_data: list[dict] = []
         for split in splits:
-            category: Category | None = db.select(Category).get(
+            category: Category | None = db.session.query(Category).get(
                 split.category_id
             )
 
@@ -116,7 +116,7 @@ def manage_category_mappings():
     """View and manage category mappings for auto-categorization."""
     # Get all mappings for the current user
     mappings = (
-        db.select(CategoryMapping)
+        db.session.query(CategoryMapping)
         .filter_by(user_id=current_user.id)
         .order_by(
             CategoryMapping.active.desc(),
@@ -128,7 +128,7 @@ def manage_category_mappings():
 
     # Get all categories for the dropdown
     categories = (
-        db.select(Category)
+        db.session.query(Category)
         .filter_by(user_id=current_user.id)
         .order_by(Category.name)
         .all()
@@ -147,7 +147,7 @@ def create_default_mappings_route() -> tuple[Response, int]:
     try:
         # Get current count to check if any were created
         current_count: int = (
-            db.select(CategoryMapping)
+            db.session.query(CategoryMapping)
             .filter_by(user_id=current_user.id)
             .count()
         )
@@ -157,7 +157,7 @@ def create_default_mappings_route() -> tuple[Response, int]:
 
         # Get new count to see how many were created
         new_count: int = (
-            db.select(CategoryMapping)
+            db.session.query(CategoryMapping)
             .filter_by(user_id=current_user.id)
             .count()
         )
@@ -190,7 +190,7 @@ def bulk_categorize_transactions():
     try:
         # Get all uncategorized transactions for the current user
         uncategorized = (
-            db.select(Expense)
+            db.session.query(Expense)
             .filter_by(user_id=current_user.id, category_id=None)
             .all()
         )
@@ -254,7 +254,7 @@ def add_category_mapping():
 
     # Check if mapping already exists
     existing: CategoryMapping | None = (
-        db.select(CategoryMapping)
+        db.session.query(CategoryMapping)
         .filter_by(user_id=current_user.id, keyword=keyword)
         .first()
     )
@@ -288,7 +288,7 @@ def add_category_mapping():
 @demo_time_limited
 def edit_category_mapping(mapping_id):
     """Edit an existing category mapping rule."""
-    mapping: CategoryMapping | None = db.select(CategoryMapping).get(
+    mapping: CategoryMapping | None = db.session.query(CategoryMapping).get(
         mapping_id
     )
     if not mapping:
@@ -317,7 +317,7 @@ def edit_category_mapping(mapping_id):
 @login_required_dev
 def toggle_category_mapping(mapping_id):
     """Toggle the active status of a mapping."""
-    mapping: CategoryMapping | None = db.select(CategoryMapping).get(
+    mapping: CategoryMapping | None = db.session.query(CategoryMapping).get(
         mapping_id
     )
     if not mapping:
@@ -346,7 +346,7 @@ def toggle_category_mapping(mapping_id):
 @login_required_dev
 def delete_category_mapping(mapping_id) -> Response:
     """Delete a category mapping rule."""
-    mapping: CategoryMapping | None = db.select(CategoryMapping).get(
+    mapping: CategoryMapping | None = db.session.query(CategoryMapping).get(
         mapping_id
     )
     if not mapping:
@@ -376,7 +376,7 @@ def learn_from_transaction_history():
 
     # Get transactions from the specified period that have categories
     transactions: list[Expense] = (
-        db.select(Expense)
+        db.session.query(Expense)
         .filter(
             Expense.user_id == current_user.id,
             Expense.date >= start_date,
@@ -425,7 +425,7 @@ def learn_from_transaction_history():
     for pattern in significant_patterns[:15]:  # Limit to top 15
         # Check if this pattern already exists
         existing = (
-            db.select(CategoryMapping)
+            db.session.query(CategoryMapping)
             .filter_by(
                 user_id=current_user.id,
                 keyword=pattern["keyword"],
@@ -525,7 +525,7 @@ def upload_category_mappings() -> Response:  # noqa: PLR0915
 
                 # Check if mapping already exists
                 existing = (
-                    db.select(CategoryMapping)
+                    db.session.query(CategoryMapping)
                     .filter_by(user_id=current_user.id, keyword=keyword)
                     .first()
                 )
@@ -538,7 +538,7 @@ def upload_category_mappings() -> Response:  # noqa: PLR0915
                 # Find the category by name (case-insensitive search)
                 # First try to find exact match
                 category = (
-                    db.select(Category)
+                    db.session.query(Category)
                     .filter(
                         Category.user_id == current_user.id,
                         func.lower(Category.name) == func.lower(category_name),
@@ -549,7 +549,7 @@ def upload_category_mappings() -> Response:  # noqa: PLR0915
                 # If not found, try subcategories
                 if not category:
                     category = (
-                        db.select(Category)
+                        db.session.query(Category)
                         .filter(
                             Category.user_id == current_user.id,
                             Category.parent_id.isnot(None),
@@ -562,7 +562,7 @@ def upload_category_mappings() -> Response:  # noqa: PLR0915
                 # If still not found, try partial matches
                 if not category:
                     category = (
-                        db.select(Category)
+                        db.session.query(Category)
                         .filter(
                             Category.user_id == current_user.id,
                             func.lower(Category.name).like(
@@ -575,7 +575,7 @@ def upload_category_mappings() -> Response:  # noqa: PLR0915
                 # If no category found, use "Other"
                 if not category:
                     category = (
-                        db.select(Category)
+                        db.session.query(Category)
                         .filter_by(
                             name="Other",
                             user_id=current_user.id,
@@ -632,7 +632,7 @@ def export_category_mappings():
     try:
         # Get all active mappings for the current user
         mappings = (
-            db.select(CategoryMapping)
+            db.session.query(CategoryMapping)
             .filter_by(user_id=current_user.id, active=True)
             .all()
         )
@@ -698,7 +698,7 @@ def has_default_categories(user_id):
 
     # Count how many of these default categories the user has
     match_count = (
-        db.select(Category)
+        db.session.query(Category)
         .filter(
             Category.user_id == user_id,
             Category.name.in_(default_category_names),
@@ -733,7 +733,7 @@ def manage_categories():
     """View and manage expense categories."""
     # Get all top-level categories
     categories: list[Category] = (
-        db.select(Category)
+        db.session.query(Category)
         .filter_by(user_id=current_user.id, parent_id=None)
         .order_by(Category.name)
         .all()
@@ -805,7 +805,7 @@ def add_category():
 
     # Validate parent category belongs to user
     if parent_id:
-        parent: Category | None = db.select(Category).get(parent_id)
+        parent: Category | None = db.session.query(Category).get(parent_id)
         if not parent or parent.user_id != current_user.id:
             flash("Invalid parent category")
             return redirect(url_for("category.manage_categories"))
@@ -829,7 +829,7 @@ def add_category():
 @login_required_dev
 def edit_category(category_id):
     """Edit an existing category."""
-    category: Category | None = db.select(Category).get(category_id)
+    category: Category | None = db.session.query(Category).get(category_id)
     if not category:
         abort(404)
 
@@ -859,7 +859,7 @@ def delete_category(category_id):
     """Debug-enhanced category deletion route."""
     try:
         # Find the category
-        category: Category | None = db.select(Category).get(category_id)
+        category: Category | None = db.session.query(Category).get(category_id)
         if not category:
             abort(404)
 
@@ -893,18 +893,18 @@ def delete_category(category_id):
 
         # Check related records before deletion
         expense_count: int = (
-            db.select(Expense).filter_by(category_id=category_id).count()
+            db.session.query(Expense).filter_by(category_id=category_id).count()
         )
         recurring_count: int = (
-            db.select(RecurringExpense)
+            db.session.query(RecurringExpense)
             .filter_by(category_id=category_id)
             .count()
         )
         budget_count: int = (
-            db.select(Budget).filter_by(category_id=category_id).count()
+            db.session.query(Budget).filter_by(category_id=category_id).count()
         )
         mapping_count: int = (
-            db.select(CategoryMapping)
+            db.session.query(CategoryMapping)
             .filter_by(category_id=category_id)
             .count()
         )
@@ -920,7 +920,7 @@ def delete_category(category_id):
 
         # Find 'Other' category (fallback)
         other_category = (
-            db.select(Category)
+            db.session.query(Category)
             .filter_by(name="Other", user_id=current_user.id, is_system=True)
             .first()
         )
@@ -936,7 +936,7 @@ def delete_category(category_id):
             )
             for subcategory in category.subcategories:
                 # Update or delete related records for subcategory
-                db.select(Expense).filter_by(
+                db.session.query(Expense).filter_by(
                     category_id=subcategory.id
                 ).update(
                     {
@@ -945,7 +945,7 @@ def delete_category(category_id):
                         else None
                     }
                 )
-                db.select(RecurringExpense).filter_by(
+                db.session.query(RecurringExpense).filter_by(
                     category_id=subcategory.id
                 ).update(
                     {
@@ -954,7 +954,7 @@ def delete_category(category_id):
                         else None
                     }
                 )
-                db.select(CategoryMapping).filter_by(
+                db.session.query(CategoryMapping).filter_by(
                     category_id=subcategory.id
                 ).delete()
 
@@ -967,16 +967,16 @@ def delete_category(category_id):
                 db.session.delete(subcategory)
 
         # Update or delete main category's related records
-        db.select(Expense).filter_by(category_id=category_id).update(
+        db.session.query(Expense).filter_by(category_id=category_id).update(
             {"category_id": other_category.id if other_category else None}
         )
-        db.select(RecurringExpense).filter_by(
+        db.session.query(RecurringExpense).filter_by(
             category_id=category_id
         ).update({"category_id": other_category.id if other_category else None})
-        db.select(Budget).filter_by(category_id=category_id).update(
+        db.session.query(Budget).filter_by(category_id=category_id).update(
             {"category_id": other_category.id if other_category else None}
         )
-        db.select(CategoryMapping).filter_by(
+        db.session.query(CategoryMapping).filter_by(
             category_id=category_id
         ).delete()
 
@@ -1007,7 +1007,7 @@ def update_category_mappings(transaction_id, category_id, learn=False):
 
     If learn=True, create a new mapping based on this categorization
     """
-    transaction: Expense | None = db.select(Expense).get(transaction_id)
+    transaction: Expense | None = db.session.query(Expense).get(transaction_id)
     if not transaction or not category_id:
         return False
 
@@ -1017,7 +1017,7 @@ def update_category_mappings(transaction_id, category_id, learn=False):
 
         # Check if a similar mapping already exists
         existing: CategoryMapping | None = (
-            db.select(CategoryMapping)
+            db.session.query(CategoryMapping)
             .filter_by(
                 user_id=transaction.user_id, keyword=keyword, active=True
             )
@@ -1095,7 +1095,7 @@ def get_categories_api() -> tuple[Response, int]:
     try:
         # Get all categories for the current user
         categories: list[Category] = (
-            db.select(Category).filter_by(user_id=current_user.id).all()
+            db.session.query(Category).filter_by(user_id=current_user.id).all()
         )
 
         # Convert to JSON-serializable format

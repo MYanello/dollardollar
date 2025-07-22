@@ -111,7 +111,7 @@ class Budget(Base):
         if self.include_subcategories:
             # If this is a parent category, include subcategories
             subcategories = (
-                db.select(Category)
+                db.session.query(Category)
                 .filter_by(parent_id=self.category_id)
                 .all()
             )
@@ -130,7 +130,7 @@ class Budget(Base):
 
         # Get all expenses that match our criteria
         expenses: list[Expense] = (
-            db.select(Expense)
+            db.session.query(Expense)
             .filter(
                 Expense.user_id == self.user_id,
                 Expense.date >= start_date,
@@ -176,7 +176,7 @@ class Budget(Base):
 
         # Find all category splits for relevant categories
         category_splits = (
-            db.select(CategorySplit)
+            db.session.query(CategorySplit)
             .join(Expense, CategorySplit.expense_id == Expense.id)
             .filter(
                 Expense.user_id == self.user_id,
@@ -189,7 +189,7 @@ class Budget(Base):
 
         # Process each category split
         for cat_split in category_splits:
-            expense = db.select(Expense).get(cat_split.expense_id)
+            expense = db.session.query(Expense).get(cat_split.expense_id)
             if not expense:
                 continue
 

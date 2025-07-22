@@ -17,7 +17,7 @@ def login_required_dev(f):
             if not current_user.is_authenticated:
                 # Get or create dev user
                 dev_user: User | None = (
-                    db.select(User).filter_by(id=DEV_USER_EMAIL).first()
+                    db.session.query(User).filter_by(id=DEV_USER_EMAIL).first()
                 )
                 if not dev_user:
                     dev_user = User(

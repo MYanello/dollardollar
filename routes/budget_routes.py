@@ -32,7 +32,7 @@ def budgets() -> str:
     """View and manage budgets."""
     # Get all budgets for the current user
     user_budgets: list[Budget] = (
-        db.select(Budget)
+        db.session.query(Budget)
         .filter_by(user_id=current_user.id)
         .order_by(Budget.created_at.desc())
         .all()
@@ -40,7 +40,7 @@ def budgets() -> str:
 
     # Get all categories for the form
     categories: list[Category] = (
-        db.select(Category)
+        db.session.query(Category)
         .filter_by(user_id=current_user.id)
         .order_by(Category.name)
         .all()
@@ -113,7 +113,7 @@ def add_budget() -> Response:
 
         # Validate category exists
         category: Category | None = (
-            db.select(Category).filter_by(id=category_id).first()
+            db.session.query(Category).filter_by(id=category_id).first()
         )
         if not category or category.user_id != current_user.id:
             flash("Invalid category selected.")
@@ -133,7 +133,7 @@ def add_budget() -> Response:
 
         # Check if a budget already exists for this category
         existing_budget: Budget | None = (
-            db.select(Budget)
+            db.session.query(Budget)
             .filter_by(
                 user_id=current_user.id,
                 category_id=category_id,
@@ -183,7 +183,7 @@ def edit_budget(budget_id) -> Response:
     try:
         # Find the budget
         budget: Budget | None = (
-            db.select(Budget).filter_by(id=budget_id).first()
+            db.session.query(Budget).filter_by(id=budget_id).first()
         )
         if not budget:
             abort(404)
@@ -234,7 +234,7 @@ def toggle_budget(budget_id) -> Response:
     try:
         # Find the budget
         budget: Budget | None = (
-            db.select(Budget).filter_by(id=budget_id).first()
+            db.session.query(Budget).filter_by(id=budget_id).first()
         )
         if not budget:
             abort(404)
@@ -268,7 +268,7 @@ def delete_budget(budget_id) -> Response:
     try:
         # Find the budget
         budget: Budget | None = (
-            db.select(Budget).filter_by(id=budget_id).first()
+            db.session.query(Budget).filter_by(id=budget_id).first()
         )
         if not budget:
             abort(404)
@@ -298,7 +298,7 @@ def get_budget(budget_id) -> tuple[Response, int]:
     try:
         # Find the budget
         budget: Budget | None = (
-            db.select(Budget).filter_by(id=budget_id).first()
+            db.session.query(Budget).filter_by(id=budget_id).first()
         )
         if not budget:
             abort(404)
@@ -314,7 +314,7 @@ def get_budget(budget_id) -> tuple[Response, int]:
 
         # Get category details
         category: Category | None = (
-            db.select(Category).filter_by(id=budget.category_id).first()
+            db.session.query(Category).filter_by(id=budget.category_id).first()
         )
         category_name: str = category.name if category else "Unknown"
 
@@ -359,7 +359,7 @@ def get_budget_summary() -> dict[str, Any]:
     """Get budget summary for current user."""
     # Get all active budgets
     active_budgets: list[Budget] = (
-        db.select(Budget)
+        db.session.query(Budget)
         .filter_by(user_id=current_user.id, active=True)
         .all()
     )
@@ -421,7 +421,7 @@ def get_subcategory_spending(budget_id) -> tuple[Response, int]:
     try:
         # Find the budget
         budget: Budget | None = (
-            db.select(Budget).filter_by(id=budget_id).first()
+            db.session.query(Budget).filter_by(id=budget_id).first()
         )
         if not budget:
             abort(404)
@@ -447,7 +447,7 @@ def get_subcategory_spending(budget_id) -> tuple[Response, int]:
 
         # Get the category and its subcategories
         category: Category | None = (
-            db.select(Category).filter_by(id=budget.category_id).first()
+            db.session.query(Category).filter_by(id=budget.category_id).first()
         )
         if not category:
             return jsonify(
@@ -566,7 +566,7 @@ def budget_trends_data() -> tuple[Response, int]:  # noqa: PLR0915
     if not budget_id:
         # Get all active budgets
         budgets = (
-            db.select(Budget)
+            db.session.query(Budget)
             .filter_by(user_id=current_user.id, active=True)
             .all()
         )
@@ -610,7 +610,7 @@ def budget_trends_data() -> tuple[Response, int]:  # noqa: PLR0915
             # 1. Get regular expenses without splits
             # (no category splits, no user splits)
             direct_expenses = (
-                db.select(Expense)
+                db.session.query(Expense)
                 .filter(
                     Expense.user_id == current_user.id,
                     Expense.date >= month_start,
@@ -636,7 +636,7 @@ def budget_trends_data() -> tuple[Response, int]:  # noqa: PLR0915
 
             # 2. Get expenses that have user splits but no category splits
             user_split_expenses: list[Expense] = (
-                db.select(Expense)
+                db.session.query(Expense)
                 .filter(
                     Expense.user_id == current_user.id,
                     Expense.date >= month_start,
@@ -694,7 +694,7 @@ def budget_trends_data() -> tuple[Response, int]:  # noqa: PLR0915
 
             # 3. Get expenses with category splits
             split_expenses: list[Expense] = (
-                db.select(Expense)
+                db.session.query(Expense)
                 .filter(
                     Expense.user_id == current_user.id,
                     Expense.date >= month_start,
@@ -709,7 +709,7 @@ def budget_trends_data() -> tuple[Response, int]:  # noqa: PLR0915
             for split_expense in split_expenses:
                 # Get category splits for this expense
                 category_splits: list[CategorySplit] = (
-                    db.select(CategorySplit)
+                    db.session.query(CategorySplit)
                     .filter_by(expense_id=split_expense.id)
                     .all()
                 )
@@ -802,7 +802,7 @@ def budget_trends_data() -> tuple[Response, int]:  # noqa: PLR0915
     else:
         # Get specific budget
         budget: Budget | None = (
-            db.select(Budget).filter_by(id=budget_id).first()
+            db.session.query(Budget).filter_by(id=budget_id).first()
         )
         if not budget:
             abort(404)
@@ -859,7 +859,7 @@ def budget_trends_data() -> tuple[Response, int]:  # noqa: PLR0915
 
             # 1. Get direct expenses (not split by category, not split by user)
             direct_expenses: list[Expense] = (
-                db.select(Expense)
+                db.session.query(Expense)
                 .filter(
                     Expense.user_id == current_user.id,
                     Expense.date >= month_start,
@@ -886,7 +886,7 @@ def budget_trends_data() -> tuple[Response, int]:  # noqa: PLR0915
 
             # 2. Get expenses with user splits but not category splits
             user_split_expenses = (
-                db.select(Expense)
+                db.session.query(Expense)
                 .filter(
                     Expense.user_id == current_user.id,
                     Expense.date >= month_start,
@@ -945,7 +945,7 @@ def budget_trends_data() -> tuple[Response, int]:  # noqa: PLR0915
 
             # 3. Get category splits for these categories
             category_splits = (
-                db.select(CategorySplit)
+                db.session.query(CategorySplit)
                 .join(Expense)
                 .filter(
                     Expense.user_id == current_user.id,
@@ -968,7 +968,7 @@ def budget_trends_data() -> tuple[Response, int]:  # noqa: PLR0915
             for expense_id, splits in expense_splits.items():
                 try:
                     # Get the expense
-                    expense: Expense | None = db.select(Expense).get(
+                    expense: Expense | None = db.session.query(Expense).get(
                         expense_id
                     )
                     if not expense:
@@ -1036,7 +1036,7 @@ def budget_trends_data() -> tuple[Response, int]:  # noqa: PLR0915
                         expense_id,
                     )
                     # Fallback: Just divide by number of participants
-                    expense = db.select(Expense).get(expense_id)
+                    expense = db.session.query(Expense).get(expense_id)
                     if expense and expense.split_with:
                         participants = 1 + len(expense.split_with.split(","))
                         relevant_amount = sum(split.amount for split in splits)
@@ -1089,7 +1089,7 @@ def budget_transactions(budget_id) -> tuple[Response, int]:  # noqa: PLR0915
     """Get transactions related to a specific budget with proper split handling."""
     # Get the budget
     budget: Budget | None = (
-        db.select(Budget).filter_by(id=budget_id).first()
+        db.session.query(Budget).filter_by(id=budget_id).first()
     )
     if not budget:
         abort(404)
@@ -1114,7 +1114,7 @@ def budget_transactions(budget_id) -> tuple[Response, int]:  # noqa: PLR0915
     # 1. Get expenses directly assigned to these categories
     # (not split by category)
     direct_expenses = (
-        db.select(Expense)
+        db.session.query(Expense)
         .filter(
             Expense.user_id == current_user.id,
             Expense.date >= start_date,
@@ -1127,7 +1127,7 @@ def budget_transactions(budget_id) -> tuple[Response, int]:  # noqa: PLR0915
 
     # 2. Get expenses with category splits for these categories
     split_expenses_query = (
-        db.select(Expense)
+        db.session.query(Expense)
         .join(CategorySplit, Expense.id == CategorySplit.expense_id)
         .filter(
             Expense.user_id == current_user.id,
@@ -1171,7 +1171,7 @@ def budget_transactions(budget_id) -> tuple[Response, int]:  # noqa: PLR0915
         if expense.has_category_splits:
             # Get category splits relevant to this budget
             relevant_cat_splits: list[CategorySplit] = (
-                db.select(CategorySplit)
+                db.session.query(CategorySplit)
                 .filter(
                     CategorySplit.expense_id == expense.id,
                     CategorySplit.category_id.in_(category_ids),
@@ -1230,7 +1230,7 @@ def budget_transactions(budget_id) -> tuple[Response, int]:  # noqa: PLR0915
             # Add category information from the first relevant split
             if relevant_cat_splits:
                 cat_id: int = relevant_cat_splits[0].category_id
-                category: Category | None = db.select(Category).get(
+                category: Category | None = db.session.query(Category).get(
                     cat_id
                 )
                 if category:
@@ -1283,7 +1283,7 @@ def budget_transactions(budget_id) -> tuple[Response, int]:  # noqa: PLR0915
 
             # Add category information
             if expense.category_id:
-                category = db.select(Category).get(expense.category_id)
+                category = db.session.query(Category).get(expense.category_id)
                 if category:
                     transaction["category_name"] = category.name
                     transaction["category_icon"] = category.icon
@@ -1323,7 +1323,7 @@ def budget_summary_data() -> tuple[Response, int]:
     try:
         # Get all active monthly budgets
         monthly_budgets: list[Budget] = (
-            db.select(Budget)
+            db.session.query(Budget)
             .filter_by(user_id=current_user.id, period="monthly", active=True)
             .all()
         )
@@ -1344,7 +1344,7 @@ def budget_summary_data() -> tuple[Response, int]:
             )
 
             # Get category info
-            category: Category | None = db.select(Category).get(
+            category: Category | None = db.session.query(Category).get(
                 budget.category_id
             )
             category_name: str = category.name if category else "Unknown"

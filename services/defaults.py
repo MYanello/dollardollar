@@ -163,7 +163,7 @@ def create_default_budgets(user_id):  # noqa: C901 PLR0912
     All deactivated by default.
     """
     # Get the user's categories first
-    categories = db.select(Category).filter_by(user_id=user_id).all()
+    categories = db.session.query(Category).filter_by(user_id=user_id).all()
     category_map = {}
 
     # Create a map of category types to their IDs
@@ -283,7 +283,7 @@ def create_default_budgets(user_id):  # noqa: C901 PLR0912
             # Check for subcategory if specified
             if "subcategory_name" in budget_template:
                 # Find the category
-                main_category = db.select(Category).get(category_id)
+                main_category = db.session.query(Category).get(category_id)
                 if main_category and hasattr(main_category, "subcategories"):
                     # Look for matching subcategory
                     for subcat in main_category.subcategories:
@@ -325,7 +325,7 @@ def create_default_category_mappings(user_id):
     """Create default category mappings for a new user."""
     # Check if user already has any mappings
     existing_mappings_count = (
-        db.select(CategoryMapping).filter_by(user_id=user_id).count()
+        db.session.query(CategoryMapping).filter_by(user_id=user_id).count()
     )
 
     # Only create defaults if user has no mappings
@@ -348,7 +348,7 @@ def create_default_category_mappings(user_id):
         "Other",
     ]:
         category = (
-            db.select(Category)
+            db.session.query(Category)
             .filter_by(user_id=user_id, name=category_name, parent_id=None)
             .first()
         )

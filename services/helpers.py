@@ -93,14 +93,14 @@ def convert_currency(amount, from_code, to_code):
     if from_code == to_code:
         return amount
 
-    from_currency = db.select(Currency).filter_by(code=from_code).first()
-    to_currency = db.select(Currency).filter_by(code=to_code).first()
+    from_currency = db.session.query(Currency).filter_by(code=from_code).first()
+    to_currency = db.session.query(Currency).filter_by(code=to_code).first()
 
     if not from_currency or not to_currency:
         return amount  # Return original if either currency not found
 
     # Get base currency for reference
-    base_currency = db.select(Currency).filter_by(is_base=True).first()
+    base_currency = db.session.query(Currency).filter_by(is_base=True).first()
     if not base_currency:
         return amount  # Cannot convert without a base currency
 
@@ -138,7 +138,7 @@ def get_base_currency():
             "name": current_user.default_currency.name,
         }
     # Fall back to system base currency if user has no preference
-    base_currency = db.select(Currency).filter_by(is_base=True).first()
+    base_currency = db.session.query(Currency).filter_by(is_base=True).first()
     if not base_currency:
         # Default to USD if no base currency is set
         return {"code": "USD", "symbol": "$", "name": "US Dollar"}
@@ -155,7 +155,7 @@ def calculate_balances(user_id):  # noqa: C901 PLR0912
 
     # Step 1: Calculate balances from expenses
     expenses = (
-        db.select(Expense)
+        db.session.query(Expense)
         .filter(
             or_(
                 Expense.paid_by == user_id,
@@ -176,7 +176,7 @@ def calculate_balances(user_id):  # noqa: C901 PLR0912
                 if other_user_id != user_id:
                     if other_user_id not in balances:
                         other_user = (
-                            db.select(User)
+                            db.session.query(User)
                             .filter_by(id=other_user_id)
                             .first()
                         )
@@ -205,7 +205,7 @@ def calculate_balances(user_id):  # noqa: C901 PLR0912
             if current_user_portion > 0:
                 if payer_id not in balances:
                     payer = (
-                        db.select(User).filter_by(id=payer_id).first()
+                        db.session.query(User).filter_by(id=payer_id).first()
                     )
                     balances[payer_id] = {
                         "user_id": payer_id,
@@ -217,7 +217,7 @@ def calculate_balances(user_id):  # noqa: C901 PLR0912
 
     # Step 2: Adjust balances based on settlements
     settlements = (
-        db.select(Settlement)
+        db.session.query(Settlement)
         .filter(
             or_(
                 Settlement.payer_id == user_id,
@@ -233,7 +233,7 @@ def calculate_balances(user_id):  # noqa: C901 PLR0912
             other_user_id = settlement.receiver_id
             if other_user_id not in balances:
                 other_user = (
-                    db.select(User).filter_by(id=other_user_id).first()
+                    db.session.query(User).filter_by(id=other_user_id).first()
                 )
                 balances[other_user_id] = {
                     "user_id": other_user_id,
@@ -251,7 +251,7 @@ def calculate_balances(user_id):  # noqa: C901 PLR0912
             other_user_id = settlement.payer_id
             if other_user_id not in balances:
                 other_user = (
-                    db.select(User).filter_by(id=other_user_id).first()
+                    db.session.query(User).filter_by(id=other_user_id).first()
                 )
                 balances[other_user_id] = {
                     "user_id": other_user_id,
@@ -276,7 +276,7 @@ def get_budget_summary():
     """Get budget summary for current user."""
     # Get all active budgets
     active_budgets = (
-        db.select(Budget)
+        db.session.query(Budget)
         .filter_by(user_id=current_user.id, active=True)
         .all()
     )
@@ -342,7 +342,7 @@ def calculate_asset_debt_trends(current_user):  # noqa: C901 PLR0912
 
     # Get all accounts for the user
     accounts = (
-        db.select(Account).filter_by(user_id=current_user.id).all()
+        db.session.query(Account).filter_by(user_id=current_user.id).all()
     )
 
     # Get user's preferred currency code
@@ -392,7 +392,7 @@ def calculate_asset_debt_trends(current_user):  # noqa: C901 PLR0912
 
         # Get monthly transactions for this account
         transactions = (
-            db.select(Expense)
+            db.session.query(Expense)
             .filter(
                 Expense.account_id == account.id,
                 Expense.user_id == current_user.id,
@@ -532,7 +532,7 @@ def detect_internal_transfer(description, amount, account_id=None):
         # Try to identify the destination account
         # Get all user accounts
         user_accounts = (
-            db.select(Account).filter_by(user_id=current_user.id).all()
+            db.session.query(Account).filter_by(user_id=current_user.id).all()
         )
 
         # Look for account names in the description
@@ -566,7 +566,7 @@ def get_category_id(category_name, description=None, user_id=None):  # noqa: PLR
     if category_name:
         # Try to find an exact match first
         category = (
-            db.select(Category)
+            db.session.query(Category)
             .filter(
                 Category.user_id == user_id if user_id else current_user.id,
                 func.lower(Category.name) == func.lower(category_name),
@@ -579,7 +579,7 @@ def get_category_id(category_name, description=None, user_id=None):  # noqa: PLR
 
         # Try to find a partial match in subcategories
         subcategory = (
-            db.select(Category)
+            db.session.query(Category)
             .filter(
                 Category.user_id == user_id if user_id else current_user.id,
                 Category.parent_id.isnot(None),
@@ -593,7 +593,7 @@ def get_category_id(category_name, description=None, user_id=None):  # noqa: PLR
 
         # Try to find a partial match in parent categories
         parent_category = (
-            db.select(Category)
+            db.session.query(Category)
             .filter(
                 Category.user_id == user_id if user_id else current_user.id,
                 Category.parent_id.is_(None),
@@ -609,7 +609,7 @@ def get_category_id(category_name, description=None, user_id=None):  # noqa: PLR
         if "auto_categorize" in request.form:
             # Find "Other" category as parent
             other_category = (
-                db.select(Category)
+                db.session.query(Category)
                 .filter_by(
                     name="Other",
                     user_id=user_id if user_id else current_user.id,
@@ -655,7 +655,7 @@ def auto_categorize_transaction(description, user_id):  # noqa: C901
 
     # Get all active category mappings for the user
     mappings = (
-        db.select(CategoryMapping)
+        db.session.query(CategoryMapping)
         .filter_by(user_id=user_id, active=True)
         .order_by(
             CategoryMapping.priority.desc(), CategoryMapping.match_count.desc()
@@ -819,14 +819,14 @@ def reset_demo_data(user_id):
 
         # 1. Get all expenses for this user
         expenses: list[Expense] = (
-            db.select(Expense).filter_by(user_id=user_id).all()
+            db.session.query(Expense).filter_by(user_id=user_id).all()
         )
         expense_ids: list[int] = [expense.id for expense in expenses]
 
         # 2. Delete category splits referencing these expenses
         if expense_ids:
             split_count: int = (
-                db.select(CategorySplit)
+                db.session.query(CategorySplit)
                 .filter(CategorySplit.expense_id.in_(expense_ids))
                 .delete(synchronize_session=False)
             )
@@ -842,13 +842,13 @@ def reset_demo_data(user_id):
 
         # 4. Now delete expenses
         expense_count: int = (
-            db.select(Expense).filter_by(user_id=user_id).delete()
+            db.session.query(Expense).filter_by(user_id=user_id).delete()
         )
         logger.info("Deleted %s expenses", {expense_count})
 
         # 5. Delete recurring expenses
         recurring_count: int = (
-            db.select(RecurringExpense)
+            db.session.query(RecurringExpense)
             .filter_by(user_id=user_id)
             .delete()
         )
@@ -856,13 +856,13 @@ def reset_demo_data(user_id):
 
         # 6. Delete budgets
         budget_count: int = (
-            db.select(Budget).filter_by(user_id=user_id).delete()
+            db.session.query(Budget).filter_by(user_id=user_id).delete()
         )
         logger.info("Deleted %s budgets", {budget_count})
 
         # 7. Delete category mappings
         mapping_count: int = (
-            db.select(CategoryMapping)
+            db.session.query(CategoryMapping)
             .filter_by(user_id=user_id)
             .delete()
         )
@@ -870,7 +870,7 @@ def reset_demo_data(user_id):
 
         # 8. Delete ignored patterns
         pattern_count: int = (
-            db.select(IgnoredRecurringPattern)
+            db.session.query(IgnoredRecurringPattern)
             .filter_by(user_id=user_id)
             .delete()
         )
@@ -878,7 +878,7 @@ def reset_demo_data(user_id):
 
         # 9. Delete SimpleFin settings
         simplefin_count: int = (
-            db.select(SimpleFinSettings)
+            db.session.query(SimpleFinSettings)
             .filter_by(user_id=user_id)
             .delete()
         )
@@ -887,7 +887,7 @@ def reset_demo_data(user_id):
         # 10. Delete settlements
 
         settlement_count: int = (
-            db.select(Settlement)
+            db.session.query(Settlement)
             .filter(
                 or_(
                     Settlement.payer_id == user_id,
@@ -900,19 +900,19 @@ def reset_demo_data(user_id):
 
         # 11. Delete all accounts
         account_count: int = (
-            db.select(Account).filter_by(user_id=user_id).delete()
+            db.session.query(Account).filter_by(user_id=user_id).delete()
         )
         logger.info("Deleted %s accounts", {account_count})
 
         # 12. Delete all tags
         tag_count: int = (
-            db.select(Tag).filter_by(user_id=user_id).delete()
+            db.session.query(Tag).filter_by(user_id=user_id).delete()
         )
         logger.info("Deleted %s tags", {tag_count})
 
         # 13. Delete all categories
         category_count: int = (
-            db.select(Category).filter_by(user_id=user_id).delete()
+            db.session.query(Category).filter_by(user_id=user_id).delete()
         )
         logger.info("Deleted %s categories", {category_count})
 
@@ -937,7 +937,7 @@ def sync_simplefin_for_user(user_id):
         try:
             # Get the user's SimpleFin settings
             settings = (
-                db.select(SimpleFin)
+                db.session.query(SimpleFin)
                 .filter_by(user_id=user_id, enabled=True)
                 .first()
             )
@@ -976,7 +976,7 @@ def sync_simplefin_for_user(user_id):
 
             # Find all SimpleFin accounts for this user
             user_accounts = (
-                db.select(Account)
+                db.session.query(Account)
                 .filter_by(user_id=user_id, import_source="simplefin")
                 .all()
             )
@@ -1021,7 +1021,7 @@ def sync_simplefin_for_user(user_id):
                     for transaction in transaction_objects:
                         # Check if transaction already exists
                         existing = (
-                            db.select(Expense)
+                            db.session.query(Expense)
                             .filter_by(
                                 user_id=user_id,
                                 external_id=transaction.external_id,
@@ -1078,7 +1078,7 @@ def calculate_category_spending(
 
     # 1. Get direct expenses (transactions directly assigned to this category without splits)
     direct_expenses = (
-        db.select(Expense)
+        db.session.query(Expense)
         .filter(
             Expense.user_id == current_user.id,
             Expense.category_id == category_id,
@@ -1121,7 +1121,7 @@ def calculate_category_spending(
             # For each subcategory, repeat the process
             # Process direct expenses
             subcat_direct = (
-                db.select(Expense)
+                db.session.query(Expense)
                 .filter(
                     Expense.user_id == current_user.id,
                     Expense.category_id == subcategory_id,
@@ -1157,7 +1157,7 @@ def calculate_category_spending(
 def init_default_currencies():
     """Initialize the default currencies in the database"""
     # Check if any currencies exist
-    if len(db.select(Currency).all()) == 0:
+    if len(db.session.query(Currency).all()) == 0:
         # Add USD as base currency
         usd = Currency(
             code="USD",

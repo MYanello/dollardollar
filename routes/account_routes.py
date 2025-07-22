@@ -37,14 +37,14 @@ def accounts() -> str:
     """View and manage financial accounts."""
     # Get all user accounts
     user_accounts: list[Account] = (
-        db.select(Account).filter_by(user_id=current_user.id).all()
+        db.session.query(Account).filter_by(user_id=current_user.id).all()
     )
 
     # Get user's preferred currency for conversion and display
     user_currency = None
     if current_user.default_currency_code:
         user_currency: Currency | None = (
-            db.select(Currency)
+            db.session.query(Currency)
             .filter_by(code=current_user.default_currency_code)
             .first()
         )
@@ -52,12 +52,12 @@ def accounts() -> str:
     # Fall back to base currency if user has no preference
     if not user_currency:
         user_currency = (
-            db.select(Currency).filter_by(is_base=True).first()
+            db.session.query(Currency).filter_by(is_base=True).first()
         )
 
     # If somehow we still don't have a currency, use USD as ultimate fallback
     if not user_currency:
-        user_currency = db.select(Currency).filter_by(
+        user_currency = db.session.query(Currency).filter_by(
             code="USD"
         ).first() or Currency(
             code="USD", name="US Dollar", symbol="$", rate_to_base=1.0
@@ -103,7 +103,7 @@ def accounts() -> str:
     net_worth = total_assets - total_liabilities
 
     # Get all currencies for the form
-    currencies: list[Currency] = db.select(Currency).all()
+    currencies: list[Currency] = db.session.query(Currency).all()
 
     return render_template(
         "accounts.html",
@@ -122,7 +122,7 @@ def advanced():
     """Display advanced features like account management and imports."""
     # Get all user accounts
     accounts: list[Account] = (
-        db.select(Account).filter_by(user_id=current_user.id).all()
+        db.session.query(Account).filter_by(user_id=current_user.id).all()
     )
 
     # Get connected accounts (those with SimpleFin integration)
@@ -152,7 +152,7 @@ def advanced():
     base_currency = get_base_currency()
 
     # Get all currencies for the form
-    currencies: list[Currency] = db.select(Currency).all()
+    currencies: list[Currency] = db.session.query(Currency).all()
 
     return render_template(
         "advanced.html",
@@ -206,7 +206,7 @@ def get_account(account_id) -> tuple[Response, int]:
     """Get account details via AJAX."""
     try:
         account: Account | None = (
-            db.select(Account).filter_by(id=account_id).first()
+            db.session.query(Account).filter_by(id=account_id).first()
         )
         if not account:
             return jsonify(
@@ -224,7 +224,7 @@ def get_account(account_id) -> tuple[Response, int]:
 
         # Get transaction count for this account
         transaction_count = (
-            db.select(Expense).filter_by(account_id=account_id).count()
+            db.session.query(Expense).filter_by(account_id=account_id).count()
         )
 
         return jsonify(
@@ -254,7 +254,7 @@ def update_account():
     try:
         account_id: str | None = request.form.get("account_id")
         account: Account | None = (
-            db.select(Account).filter_by(id=account_id).first()
+            db.session.query(Account).filter_by(id=account_id).first()
         )
         if not account:
             flash("Account not found")
@@ -288,7 +288,7 @@ def delete_account(account_id) -> tuple[Response, int]:
     """Delete an account."""
     try:
         account: Account | None = (
-            db.select(Account).filter_by(id=account_id).first()
+            db.session.query(Account).filter_by(id=account_id).first()
         )
         if not account:
             return jsonify(
@@ -381,7 +381,7 @@ def import_csv() -> Response | str:  # noqa: PLR0915 PLR0911
         # Get account if specified
         account = None
         if account_id:
-            account = db.select(Account).filter_by(id=account_id).first()
+            account = db.session.query(Account).filter_by(id=account_id).first()
             if not account:
                 flash("Account not found")
                 return redirect(url_for("account.advanced"))
@@ -479,7 +479,7 @@ def import_csv() -> Response | str:  # noqa: PLR0915 PLR0911
 
         # Get existing cards used
         existing_cards = (
-            db.select(Expense.card_used)
+            db.session.query(Expense.card_used)
             .filter_by(user_id=current_user.id)
             .distinct()
             .all()
@@ -583,7 +583,7 @@ def import_csv() -> Response | str:  # noqa: PLR0915 PLR0911
                 # Check for duplicates if enabled
                 if detect_duplicates and external_id:
                     existing = (
-                        db.select(Expense)
+                        db.session.query(Expense)
                         .filter_by(
                             user_id=current_user.id,
                             external_id=external_id,
@@ -643,12 +643,12 @@ def import_csv() -> Response | str:  # noqa: PLR0915 PLR0911
                     and transaction.destination_account_id
                 ):
                     from_account = (
-                        db.select(Account)
+                        db.session.query(Account)
                         .filter_by(id=transaction.account_id)
                         .first()
                     )
                     to_account = (
-                        db.select(Account)
+                        db.session.query(Account)
                         .filter_by(id=transaction.destination_account_id)
                         .first()
                     )

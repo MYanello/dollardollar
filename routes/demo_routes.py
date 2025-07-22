@@ -66,7 +66,7 @@ def login() -> str | Response:
 
     # Find or create demo user
     demo_user: User | None = (
-        db.select(User).filter_by(id="demo@example.com").first()
+        db.session.query(User).filter_by(id="demo@example.com").first()
     )
     if not demo_user:
         logger.info("Creating new demo user")
@@ -142,7 +142,7 @@ def create_demo_data(user_id) -> bool:  # noqa: PLR0915
 
     # Check if demo data already exists
     existing_accounts: list[Account] = (
-        db.select(Account).filter_by(user_id=user_id).all()
+        db.session.query(Account).filter_by(user_id=user_id).all()
     )
     if existing_accounts:
         logger.info(
@@ -154,7 +154,7 @@ def create_demo_data(user_id) -> bool:  # noqa: PLR0915
 
     # Create sample accounts if they don't exist
     checking: Account | None = (
-        db.select(Account)
+        db.session.query(Account)
         .filter_by(name="Demo Checking", user_id=user_id)
         .first()
     )
@@ -171,7 +171,7 @@ def create_demo_data(user_id) -> bool:  # noqa: PLR0915
         db.session.add(checking)
 
     savings: Account | None = (
-        db.select(Account)
+        db.session.query(Account)
         .filter_by(name="Demo Savings", user_id=user_id)
         .first()
     )
@@ -188,7 +188,7 @@ def create_demo_data(user_id) -> bool:  # noqa: PLR0915
         db.session.add(savings)
 
     credit: Account | None = (
-        db.select(Account)
+        db.session.query(Account)
         .filter_by(name="Demo Credit Card", user_id=user_id)
         .first()
     )
@@ -205,7 +205,7 @@ def create_demo_data(user_id) -> bool:  # noqa: PLR0915
         db.session.add(credit)
 
     investment: Account | None = (
-        db.select(Account)
+        db.session.query(Account)
         .filter_by(name="Demo Investment", user_id=user_id)
         .first()
     )
@@ -225,22 +225,22 @@ def create_demo_data(user_id) -> bool:  # noqa: PLR0915
 
     # Get categories
     food_category: Category | None = (
-        db.select(Category)
+        db.session.query(Category)
         .filter_by(name="Food", user_id=user_id)
         .first()
     )
     housing_category: Category | None = (
-        db.select(Category)
+        db.session.query(Category)
         .filter_by(name="Housing", user_id=user_id)
         .first()
     )
     transportation_category: Category | None = (
-        db.select(Category)
+        db.session.query(Category)
         .filter_by(name="Transportation", user_id=user_id)
         .first()
     )
     entertainment_category: Category | None = (
-        db.select(Category)
+        db.session.query(Category)
         .filter_by(name="Entertainment", user_id=user_id)
         .first()
     )
@@ -248,7 +248,7 @@ def create_demo_data(user_id) -> bool:  # noqa: PLR0915
     # Create sample transactions if they don't exist
     # 1. Regular expenses
     if (
-        not db.select(Expense)
+        not db.session.query(Expense)
         .filter_by(description="Grocery shopping", user_id=user_id)
         .first()
     ):
@@ -270,7 +270,7 @@ def create_demo_data(user_id) -> bool:  # noqa: PLR0915
         db.session.add(expense1)
 
     if (
-        not db.select(Expense)
+        not db.session.query(Expense)
         .filter_by(description="Monthly rent", user_id=user_id)
         .first()
     ):
@@ -293,7 +293,7 @@ def create_demo_data(user_id) -> bool:  # noqa: PLR0915
 
     # 2. Income transactions
     if (
-        not db.select(Expense)
+        not db.session.query(Expense)
         .filter_by(description="Salary deposit", user_id=user_id)
         .first()
     ):
@@ -315,7 +315,7 @@ def create_demo_data(user_id) -> bool:  # noqa: PLR0915
         db.session.add(income1)
 
     if (
-        not db.select(Expense)
+        not db.session.query(Expense)
         .filter_by(description="Side gig payment", user_id=user_id)
         .first()
     ):
@@ -338,7 +338,7 @@ def create_demo_data(user_id) -> bool:  # noqa: PLR0915
 
     # Add expenses with category splits
     if (
-        not db.select(Expense)
+        not db.session.query(Expense)
         .filter_by(description="Shopping trip (mixed)", user_id=user_id)
         .first()
     ):
@@ -346,12 +346,12 @@ def create_demo_data(user_id) -> bool:  # noqa: PLR0915
 
         # Get additional categories
         shopping_category: Category | None = (
-            db.select(Category)
+            db.session.query(Category)
             .filter_by(name="Shopping", user_id=user_id)
             .first()
         )
         personal_category: Category | None = (
-            db.select(Category)
+            db.session.query(Category)
             .filter_by(name="Personal", user_id=user_id)
             .first()
         )
@@ -405,7 +405,7 @@ def create_demo_data(user_id) -> bool:  # noqa: PLR0915
 
     # Add another split expense example - travel related
     if (
-        not db.select(Expense)
+        not db.session.query(Expense)
         .filter_by(description="Weekend trip expenses", user_id=user_id)
         .first()
     ):
@@ -461,7 +461,7 @@ def create_demo_data(user_id) -> bool:  # noqa: PLR0915
 
     # 3. Transfers between accounts
     if (
-        not db.select(Expense)
+        not db.session.query(Expense)
         .filter_by(description="Transfer to savings", user_id=user_id)
         .first()
     ):
@@ -484,7 +484,7 @@ def create_demo_data(user_id) -> bool:  # noqa: PLR0915
         db.session.add(transfer1)
 
     if (
-        not db.select(Expense)
+        not db.session.query(Expense)
         .filter_by(description="Credit card payment", user_id=user_id)
         .first()
     ):
@@ -507,7 +507,7 @@ def create_demo_data(user_id) -> bool:  # noqa: PLR0915
         db.session.add(transfer2)
 
     if (
-        not db.select(Expense)
+        not db.session.query(Expense)
         .filter_by(description="Investment contribution", user_id=user_id)
         .first()
     ):
@@ -531,7 +531,7 @@ def create_demo_data(user_id) -> bool:  # noqa: PLR0915
 
     # 4. Create recurring expenses
     netflix_recurring: RecurringExpense | None = (
-        db.select(RecurringExpense)
+        db.session.query(RecurringExpense)
         .filter_by(description="Netflix Subscription", user_id=user_id)
         .first()
     )
@@ -555,7 +555,7 @@ def create_demo_data(user_id) -> bool:  # noqa: PLR0915
         db.session.add(recurring1)
 
     rent_recurring: RecurringExpense | None = (
-        db.select(RecurringExpense)
+        db.session.query(RecurringExpense)
         .filter_by(description="Monthly Rent Payment", user_id=user_id)
         .first()
     )
@@ -578,7 +578,7 @@ def create_demo_data(user_id) -> bool:  # noqa: PLR0915
 
     # 5. Create budgets
     food_budget: Budget | None = (
-        db.select(Budget)
+        db.session.query(Budget)
         .filter_by(name="Monthly Food", user_id=user_id)
         .first()
     )
@@ -598,7 +598,7 @@ def create_demo_data(user_id) -> bool:  # noqa: PLR0915
         db.session.add(budget1)
 
     transport_budget: Budget | None = (
-        db.select(Budget)
+        db.session.query(Budget)
         .filter_by(name="Transportation Budget", user_id=user_id)
         .first()
     )
@@ -618,7 +618,7 @@ def create_demo_data(user_id) -> bool:  # noqa: PLR0915
         db.session.add(budget2)
 
     entertainment_budget = (
-        db.select(Budget)
+        db.session.query(Budget)
         .filter_by(name="Entertainment Budget", user_id=user_id)
         .first()
     )
