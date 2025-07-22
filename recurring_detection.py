@@ -1,43 +1,54 @@
-# recurring_detection.py
-from datetime import datetime, timedelta
-from collections import defaultdict
 import calendar
+from collections import defaultdict
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import and_
+
+from app import Expense, RecurringExpense
+from database import db
+
 
 def detect_recurring_transactions(user_id, lookback_days=60, min_occurrences=2):
-    """
-    Detect potential recurring transactions for a user based on transaction history.
+    """Detect potential recurring transactions for a user based on transaction history.
 
-    Parameters:
+    Parameters
+    ----------
     - user_id: The user ID to detect recurring transactions for
     - lookback_days: Number of days to look back for transaction history (default: 60)
     - min_occurrences: Minimum number of occurrences to consider a transaction recurring (default: 2)
 
-    Returns:
+    Returns
+    -------
     - A list of potential recurring transactions with metadata
+
     """
     # Calculate start date for analysis period
-    from app import Expense
-    from sqlalchemy import and_
 
-    end_date = datetime.now()
+    end_date = datetime.now(UTC)
     start_date = end_date - timedelta(days=lookback_days)
 
     # Query user's transactions in the period
-    transactions = Expense.query.filter(
-        and_(
-            Expense.user_id == user_id,
-            Expense.date >= start_date,
-            Expense.date <= end_date,
-            # Exclude transactions that are already from recurring sources
-            Expense.recurring_id.is_(None)
+    transactions = (
+        db.select(Expense)
+        .filter(
+            and_(
+                Expense.user_id == user_id,
+                Expense.date >= start_date,
+                Expense.date <= end_date,
+                # Exclude transactions that are already from recurring sources
+                Expense.recurring_id.is_(None),
+            )
         )
-    ).order_by(Expense.date).all()
+        .order_by(Expense.date)
+        .all()
+    )
 
     # Group transactions by name + amount (potential recurrence key)
     transaction_groups = defaultdict(list)
 
     for transaction in transactions:
-        # Create a composite key of description and amount (rounded to handle minor variations)
+        # Create a composite key of description and amount
+        # (rounded to handle minor variations)
         key = f"{transaction.description.strip().lower()}_{round(transaction.amount, 2)}"
         transaction_groups[key].append(transaction)
 
@@ -55,7 +66,9 @@ def detect_recurring_transactions(user_id, lookback_days=60, min_occurrences=2):
         # Analyze time intervals between transactions
         intervals = []
         for i in range(1, len(sorted_transactions)):
-            delta = (sorted_transactions[i].date - sorted_transactions[i-1].date).days
+            delta = (
+                sorted_transactions[i].date - sorted_transactions[i - 1].date
+            ).days
             intervals.append(delta)
 
         # Skip if no intervals (only one transaction)
@@ -86,50 +99,53 @@ def detect_recurring_transactions(user_id, lookback_days=60, min_occurrences=2):
             # Get sample transaction for details
             sample = sorted_transactions[0]
 
-            recurring_candidates.append({
-                'description': sample.description,
-                'amount': sample.amount,
-                'currency_code': sample.currency_code,
-                'frequency': frequency,
-                'account_id': sample.account_id,
-                'category_id': sample.category_id,
-                'transaction_type': sample.transaction_type,
-                'confidence': min(interval_consistency * 100, 98),  # Never show 100% confident
-                'occurrences': len(sorted_transactions),
-                'last_date': last_transaction.date,
-                'next_date': next_date,
-                'avg_interval': round(avg_interval, 1),
-                # Include transaction IDs for reference
-                'transaction_ids': [t.id for t in sorted_transactions]
-            })
+            recurring_candidates.append(
+                {
+                    "description": sample.description,
+                    "amount": sample.amount,
+                    "currency_code": sample.currency_code,
+                    "frequency": frequency,
+                    "account_id": sample.account_id,
+                    "category_id": sample.category_id,
+                    "transaction_type": sample.transaction_type,
+                    "confidence": min(
+                        interval_consistency * 100, 98
+                    ),  # Never show 100% confident
+                    "occurrences": len(sorted_transactions),
+                    "last_date": last_transaction.date,
+                    "next_date": next_date,
+                    "avg_interval": round(avg_interval, 1),
+                    # Include transaction IDs for reference
+                    "transaction_ids": [t.id for t in sorted_transactions],
+                }
+            )
 
     # Sort by confidence (highest first)
-    recurring_candidates.sort(key=lambda x: x['confidence'], reverse=True)
+    recurring_candidates.sort(key=lambda x: x["confidence"], reverse=True)
 
     return recurring_candidates
 
 
 def determine_frequency(avg_interval):
-    """Determine the likely frequency based on average interval in days"""
+    """Determine the likely frequency based on average interval in days."""
     if 25 <= avg_interval <= 35:
-        return 'monthly'
-    elif 6 <= avg_interval <= 8:
-        return 'weekly'
-    elif 13 <= avg_interval <= 16:
-        return 'biweekly'
-    elif 85 <= avg_interval <= 95:
-        return 'quarterly'
-    elif 350 <= avg_interval <= 380:
-        return 'yearly'
-    elif avg_interval <= 3:
-        return 'daily'
-    else:
-        return None  # Can't determine frequency
+        return "monthly"
+    if 6 <= avg_interval <= 8:
+        return "weekly"
+    if 13 <= avg_interval <= 16:
+        return "biweekly"
+    if 85 <= avg_interval <= 95:
+        return "quarterly"
+    if 350 <= avg_interval <= 380:
+        return "yearly"
+    if avg_interval <= 3:
+        return "daily"
+    return None  # Can't determine frequency
 
 
 def calculate_interval_consistency(intervals):
-    """
-    Calculate how consistent the intervals are.
+    """Calculate how consistent the intervals are.
+
     Returns a value between 0 and 1, where 1 is perfectly consistent.
     """
     if not intervals:
@@ -142,7 +158,7 @@ def calculate_interval_consistency(intervals):
     # Calculate mean and standard deviation
     mean_interval = sum(intervals) / len(intervals)
     variance = sum((x - mean_interval) ** 2 for x in intervals) / len(intervals)
-    std_deviation = variance ** 0.5
+    std_deviation = variance**0.5
 
     # Calculate coefficient of variation (lower is more consistent)
     if mean_interval == 0:
@@ -154,19 +170,18 @@ def calculate_interval_consistency(intervals):
     # If CV is greater than 0.5, consistency drops quickly
     if cv > 0.5:
         return max(0, 1 - (cv * 1.5))
-    else:
-        return max(0, 1 - cv)
+    return max(0, 1 - cv)
 
 
-def calculate_next_occurrence(last_date, frequency):
-    """Calculate the next expected occurrence based on frequency"""
-    if frequency == 'daily':
+def calculate_next_occurrence(last_date, frequency):  # noqa: PLR0911
+    """Calculate the next expected occurrence based on frequency."""
+    if frequency == "daily":
         return last_date + timedelta(days=1)
-    elif frequency == 'weekly':
+    if frequency == "weekly":
         return last_date + timedelta(weeks=1)
-    elif frequency == 'biweekly':
+    if frequency == "biweekly":
         return last_date + timedelta(weeks=2)
-    elif frequency == 'monthly':
+    if frequency == "monthly":
         # Handle month rollover properly
         month = last_date.month + 1
         year = last_date.year
@@ -179,7 +194,7 @@ def calculate_next_occurrence(last_date, frequency):
         day = min(last_date.day, calendar.monthrange(year, month)[1])
 
         return last_date.replace(year=year, month=month, day=day)
-    elif frequency == 'quarterly':
+    if frequency == "quarterly":
         # Add three months
         month = last_date.month + 3
         year = last_date.year
@@ -192,46 +207,45 @@ def calculate_next_occurrence(last_date, frequency):
         day = min(last_date.day, calendar.monthrange(year, month)[1])
 
         return last_date.replace(year=year, month=month, day=day)
-    elif frequency == 'yearly':
+    if frequency == "yearly":
         # Add a year
         return last_date.replace(year=last_date.year + 1)
-    else:
-        # Default fallback
-        return last_date + timedelta(days=30)
+    # Default fallback
+    return last_date + timedelta(days=30)
 
 
-def create_recurring_expense_from_detection(user_id, candidate, start_date=None):
-    """
-    Create a RecurringExpense from a detected candidate
+def create_recurring_expense_from_detection(
+    user_id, candidate, start_date=None
+):
+    """Create a RecurringExpense from a detected candidate
 
-    Parameters:
+    Parameters
+    ----------
     - user_id: User ID to create the recurring expense for
     - candidate: The detected recurring candidate dict
     - start_date: Optional start date (defaults to today)
 
-    Returns:
+    Returns
+    -------
     - The created RecurringExpense object
-    """
-    from app import RecurringExpense
 
+    """
     if start_date is None:
-        start_date = datetime.now()
+        start_date = datetime.now(UTC)
 
     # Create the recurring expense
-    recurring = RecurringExpense(
-        description=candidate['description'],
-        amount=candidate['amount'],
+    return RecurringExpense(
+        description=candidate["description"],
+        amount=candidate["amount"],
         card_used="Auto-detected",  # This will be replaced by account name in the form
-        split_method='equal',  # Default for auto-detected
+        split_method="equal",  # Default for auto-detected
         paid_by=user_id,
         user_id=user_id,
-        frequency=candidate['frequency'],
+        frequency=candidate["frequency"],
         start_date=start_date,
         active=False,  # Default to inactive until user confirms
-        currency_code=candidate.get('currency_code'),
-        category_id=candidate.get('category_id'),
-        account_id=candidate.get('account_id'),
-        transaction_type=candidate['transaction_type']
+        currency_code=candidate.get("currency_code"),
+        category_id=candidate.get("category_id"),
+        account_id=candidate.get("account_id"),
+        transaction_type=candidate["transaction_type"],
     )
-
-    return recurring
