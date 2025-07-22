@@ -1,6 +1,4 @@
-{% extends "base.html" %}
-
-{% block content %}
+{% extends "base.html" %} {% block content %}
 <div class="container">
     <div class="row mb-4">
         <div class="col-md-12">
@@ -11,12 +9,14 @@
                 </button>
             </div>
             <p class="text-light">
-                Auto-mapping rules help categorize your transactions automatically based on their descriptions.
-                When you add a new transaction, the system will check these rules to suggest the most appropriate category.
+                Auto-mapping rules help categorize your transactions
+                automatically based on their descriptions. When you add a new
+                transaction, the system will check these rules to suggest the
+                most appropriate category.
             </p>
         </div>
     </div>
-    
+
     <div class="row">
         <!-- Left column: Forms and Tools -->
         <div class="col-md-4 mb-4">
@@ -26,57 +26,118 @@
                     <h5 class="mb-0" id="formTitle">Create New Rule</h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="{{ url_for('add_category_mapping') }}" id="mappingForm">
+                    <form
+                        method="POST"
+                        action="{{ url_for('category.add_category_mapping') }}"
+                        id="mappingForm"
+                    >
                         <div class="mb-3">
-                            <label for="keyword" class="form-label">Keyword or Pattern</label>
-                            <input type="text" class="form-control bg-dark text-light" id="keyword" name="keyword" required>
-                            <div class="form-text">Enter a word or phrase that appears in transaction descriptions.</div>
+                            <label for="keyword" class="form-label"
+                                >Keyword or Pattern</label
+                            >
+                            <input
+                                type="text"
+                                class="form-control bg-dark text-light"
+                                id="keyword"
+                                name="keyword"
+                                required
+                            />
+                            <div class="form-text">
+                                Enter a word or phrase that appears in
+                                transaction descriptions.
+                            </div>
                         </div>
                         <div class="mb-3">
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="is_regex" name="is_regex">
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    id="is_regex"
+                                    name="is_regex"
+                                />
                                 <label class="form-check-label" for="is_regex">
                                     Use as Regular Expression
                                 </label>
                             </div>
-                            <div class="form-text">Advanced: Use regular expressions for more complex pattern matching.</div>
+                            <div class="form-text">
+                                Advanced: Use regular expressions for more
+                                complex pattern matching.
+                            </div>
                         </div>
                         <div class="mb-3">
-                            <label for="category_id" class="form-label">Category</label>
-                            <select class="form-select bg-dark text-light" id="category_id" name="category_id" required>
+                            <label for="category_id" class="form-label"
+                                >Category</label
+                            >
+                            <select
+                                class="form-select bg-dark text-light"
+                                id="category_id"
+                                name="category_id"
+                                required
+                            >
                                 <option value="">Select a category</option>
-                                {% for category in categories if not category.parent_id %}
-                                    <optgroup label="{{ category.name }}">
-                                        <option value="{{ category.id }}" 
-                                                data-icon="{{ category.icon }}" 
-                                                data-color="{{ category.color }}">
-                                            {{ category.name }} (Parent)
-                                        </option>
-                                        {% for subcat in category.subcategories %}
-                                            <option value="{{ subcat.id }}" 
-                                                    data-icon="{{ subcat.icon }}" 
-                                                    data-color="{{ subcat.color }}">
-                                                {{ subcat.name }}
-                                            </option>
-                                        {% endfor %}
-                                    </optgroup>
+                                {% for category in categories if not
+                                category.parent_id %}
+                                <optgroup label="{{ category.name }}">
+                                    <option
+                                        value="{{ category.id }}"
+                                        data-icon="{{ category.icon }}"
+                                        data-color="{{ category.color }}"
+                                    >
+                                        {{ category.name }} (Parent)
+                                    </option>
+                                    {% for subcat in category.subcategories %}
+                                    <option
+                                        value="{{ subcat.id }}"
+                                        data-icon="{{ subcat.icon }}"
+                                        data-color="{{ subcat.color }}"
+                                    >
+                                        {{ subcat.name }}
+                                    </option>
+                                    {% endfor %}
+                                </optgroup>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label for="priority" class="form-label">Priority (0-10)</label>
-                            <input type="number" class="form-control bg-dark text-light" id="priority" name="priority" min="0" max="10" value="0">
-                            <div class="form-text">Higher priority rules take precedence when multiple rules match.</div>
+                            <label for="priority" class="form-label"
+                                >Priority (0-10)</label
+                            >
+                            <input
+                                type="number"
+                                class="form-control bg-dark text-light"
+                                id="priority"
+                                name="priority"
+                                min="0"
+                                max="10"
+                                value="0"
+                            />
+                            <div class="form-text">
+                                Higher priority rules take precedence when
+                                multiple rules match.
+                            </div>
                         </div>
-                        
+
                         <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-primary" id="submitBtn">Create Rule</button>
-                            <button type="button" class="btn btn-secondary" id="resetBtn" style="display: none;">Cancel Edit</button>
+                            <button
+                                type="submit"
+                                class="btn btn-primary"
+                                id="submitBtn"
+                            >
+                                Create Rule
+                            </button>
+                            <button
+                                type="button"
+                                class="btn btn-secondary"
+                                id="resetBtn"
+                                style="display: none"
+                            >
+                                Cancel Edit
+                            </button>
                         </div>
                     </form>
                 </div>
             </div>
-            
+
             <!-- Learn from History Card -->
             <div class="card mt-4">
                 <div class="card-header">
@@ -84,12 +145,23 @@
                 </div>
                 <div class="card-body">
                     <p>
-                        Analyze your past transactions to automatically create mapping rules based on your categorization patterns.
+                        Analyze your past transactions to automatically create
+                        mapping rules based on your categorization patterns.
                     </p>
-                    <form method="POST" action="{{ url_for('learn_from_transaction_history') }}" class="row g-3">
+                    <form
+                        method="POST"
+                        action="{{ url_for('category.learn_from_transaction_history') }}"
+                        class="row g-3"
+                    >
                         <div class="col-md-6">
-                            <label for="days" class="form-label">Analyze from last:</label>
-                            <select class="form-select bg-dark text-light" id="days" name="days">
+                            <label for="days" class="form-label"
+                                >Analyze from last:</label
+                            >
+                            <select
+                                class="form-select bg-dark text-light"
+                                id="days"
+                                name="days"
+                            >
                                 <option value="30">30 days</option>
                                 <option value="60">60 days</option>
                                 <option value="90">90 days</option>
@@ -106,7 +178,7 @@
                     </form>
                 </div>
             </div>
-            
+
             <!-- Import/Export Card -->
             <div class="card mt-4">
                 <div class="card-header">
@@ -118,52 +190,84 @@
                         <div class="col-md-12 mb-4">
                             <h6 class="mb-3">Import Mappings</h6>
                             <p class="small text-light">
-                                Upload a CSV file with mappings. Required columns: "keyword" and "category".
-                                Optional columns: "is_regex" (true/false) and "priority" (0-10).
+                                Upload a CSV file with mappings. Required
+                                columns: "keyword" and "category". Optional
+                                columns: "is_regex" (true/false) and "priority"
+                                (0-10).
                             </p>
-                            <form method="POST" action="{{ url_for('upload_category_mappings') }}" enctype="multipart/form-data">
+                            <form
+                                method="POST"
+                                action="{{ url_for('category.upload_category_mappings') }}"
+                                enctype="multipart/form-data"
+                            >
                                 <div class="mb-3">
-                                    <label for="mapping_file" class="form-label">Select CSV File</label>
-                                    <input class="form-control form-control-sm bg-dark text-light" type="file" id="mapping_file" name="mapping_file" accept=".csv">
+                                    <label for="mapping_file" class="form-label"
+                                        >Select CSV File</label
+                                    >
+                                    <input
+                                        class="form-control form-control-sm bg-dark text-light"
+                                        type="file"
+                                        id="mapping_file"
+                                        name="mapping_file"
+                                        accept=".csv"
+                                    />
                                 </div>
                                 <div class="d-grid">
-                                    <button type="submit" class="btn btn-primary btn-sm">
-                                        <i class="fas fa-file-import me-2"></i>Import Mappings
+                                    <button
+                                        type="submit"
+                                        class="btn btn-primary btn-sm"
+                                    >
+                                        <i class="fas fa-file-import me-2"></i
+                                        >Import Mappings
                                     </button>
                                 </div>
                             </form>
                         </div>
-                        
+
                         <!-- Export Section -->
                         <div class="col-md-12">
                             <h6 class="mb-3">Export Mappings</h6>
                             <p class="small text-light">
-                                Export your current active mappings to a CSV file that you can edit and share.
+                                Export your current active mappings to a CSV
+                                file that you can edit and share.
                             </p>
-                            <a href="{{ url_for('export_category_mappings') }}" class="btn btn-info btn-sm w-100 mb-3">
-                                <i class="fas fa-file-export me-2"></i>Export Active Mappings
+                            <a
+                                href="{{ url_for('category.export_category_mappings') }}"
+                                class="btn btn-info btn-sm w-100 mb-3"
+                            >
+                                <i class="fas fa-file-export me-2"></i>Export
+                                Active Mappings
                             </a>
-                            
+
                             <!-- Download Sample Template -->
                             <h6 class="mb-2">Sample Template</h6>
                             <p class="small text-light">
-                                Download a sample template with the correct CSV format.
+                                Download a sample template with the correct CSV
+                                format.
                             </p>
-                            <button class="btn btn-outline-secondary btn-sm w-100" id="downloadSampleBtn">
-                                <i class="fas fa-download me-2"></i>Download Template
+                            <button
+                                class="btn btn-outline-secondary btn-sm w-100"
+                                id="downloadSampleBtn"
+                            >
+                                <i class="fas fa-download me-2"></i>Download
+                                Template
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        
+
         <!-- Right column: Mapping Rules Table -->
         <div class="col-md-8">
             <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
+                <div
+                    class="card-header d-flex justify-content-between align-items-center"
+                >
                     <h5 class="mb-0">Your Mapping Rules</h5>
-                    <span class="badge bg-primary">{{ mappings|length }} Rules</span>
+                    <span class="badge bg-primary"
+                        >{{ mappings|length }} Rules</span
+                    >
                 </div>
                 <div class="card-body">
                     {% if mappings %}
@@ -182,42 +286,77 @@
                             </thead>
                             <tbody>
                                 {% for mapping in mappings %}
-                                <tr class="{{ 'text-muted' if not mapping.active }}">
+                                <tr
+                                    class="{{ 'text-muted' if not mapping.active }}"
+                                >
                                     <td>{{ mapping.keyword }}</td>
                                     <td>
                                         {% if mapping.category %}
-                                            <span class="badge" style="background-color: {{ mapping.category.color }};">
-                                                <i class="fas {{ mapping.category.icon }}"></i>
-                                                {{ mapping.category.name }}
-                                            </span>
+                                        <span
+                                            class="badge"
+                                            style="background-color: {{ mapping.category.color }};"
+                                        >
+                                            <i
+                                                class="fas {{ mapping.category.icon }}"
+                                            ></i>
+                                            {{ mapping.category.name }}
+                                        </span>
                                         {% else %}
-                                            <span class="badge bg-danger">Missing Category</span>
+                                        <span class="badge bg-danger"
+                                            >Missing Category</span
+                                        >
                                         {% endif %}
                                     </td>
                                     <td>{{ mapping.priority }}</td>
                                     <td>{{ mapping.match_count }}</td>
-                                    <td>{{ 'RegEx' if mapping.is_regex else 'Simple' }}</td>
+                                    <td>
+                                        {{ 'RegEx' if mapping.is_regex else
+                                        'Simple' }}
+                                    </td>
                                     <td>
                                         {% if mapping.active %}
-                                            <span class="badge bg-success">Active</span>
+                                        <span class="badge bg-success"
+                                            >Active</span
+                                        >
                                         {% else %}
-                                            <span class="badge bg-secondary">Inactive</span>
+                                        <span class="badge bg-secondary"
+                                            >Inactive</span
+                                        >
                                         {% endif %}
                                     </td>
                                     <td>
                                         <div class="btn-group" role="group">
-                                            <button type="button" class="btn btn-sm btn-outline-primary" 
-                                                    onclick="editMapping({{ mapping.id }}, '{{ mapping.keyword|replace('\'', '\\\'') }}', {{ mapping.category_id }}, {{ mapping.priority }}, {{ 'true' if mapping.is_regex else 'false' }})">
+                                            <button
+                                                type="button"
+                                                class="btn btn-sm btn-outline-primary"
+                                                onclick="editMapping({{ mapping.id }}, '{{ mapping.keyword|replace('\'', '\\\'') }}', {{ mapping.category_id }}, {{ mapping.priority }}, {{ 'true' if mapping.is_regex else 'false' }})"
+                                            >
                                                 <i class="fas fa-edit"></i>
                                             </button>
-                                            <form method="POST" action="{{ url_for('toggle_category_mapping', mapping_id=mapping.id) }}" class="d-inline">
-                                                <button type="submit" class="btn btn-sm btn-outline-{{ 'warning' if mapping.active else 'success' }}">
-                                                    <i class="fas {{ 'fa-pause' if mapping.active else 'fa-play' }}"></i>
+                                            <form
+                                                method="POST"
+                                                action="{{ url_for('category.toggle_category_mapping', mapping_id=mapping.id) }}"
+                                                class="d-inline"
+                                            >
+                                                <button
+                                                    type="submit"
+                                                    class="btn btn-sm btn-outline-{{ 'warning' if mapping.active else 'success' }}"
+                                                >
+                                                    <i
+                                                        class="fas {{ 'fa-pause' if mapping.active else 'fa-play' }}"
+                                                    ></i>
                                                 </button>
                                             </form>
-                                            <form method="POST" action="{{ url_for('delete_category_mapping', mapping_id=mapping.id) }}" 
-                                                class="d-inline" onsubmit="return confirm('Are you sure you want to delete this mapping rule?');">
-                                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                            <form
+                                                method="POST"
+                                                action="{{ url_for('category.delete_category_mapping', mapping_id=mapping.id) }}"
+                                                class="d-inline"
+                                                onsubmit="return confirm('Are you sure you want to delete this mapping rule?');"
+                                            >
+                                                <button
+                                                    type="submit"
+                                                    class="btn btn-sm btn-outline-danger"
+                                                >
                                                     <i class="fas fa-trash"></i>
                                                 </button>
                                             </form>
@@ -231,7 +370,8 @@
                     {% else %}
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle me-2"></i>
-                        You don't have any category mapping rules yet. Create some rules to start auto-categorizing your transactions.
+                        You don't have any category mapping rules yet. Create
+                        some rules to start auto-categorizing your transactions.
                     </div>
                     {% endif %}
                 </div>
@@ -239,116 +379,140 @@
         </div>
     </div>
 </div>
-{% endblock %}
-
-{% block scripts %}
+{% endblock %} {% block scripts %}
 <script>
     // Function to handle editing mapping rules
     function editMapping(id, keyword, categoryId, priority, isRegex) {
         // Change form action to edit route
-        const form = document.getElementById('mappingForm');
+        const form = document.getElementById("mappingForm");
         form.action = `/category_mappings/edit/${id}`;
-        
+
         // Fill in form fields
-        document.getElementById('keyword').value = keyword;
-        document.getElementById('category_id').value = categoryId;
-        document.getElementById('priority').value = priority;
-        document.getElementById('is_regex').checked = isRegex;
-        
+        document.getElementById("keyword").value = keyword;
+        document.getElementById("category_id").value = categoryId;
+        document.getElementById("priority").value = priority;
+        document.getElementById("is_regex").checked = isRegex;
+
         // Update form UI
-        document.getElementById('formTitle').textContent = 'Edit Mapping Rule';
-        document.getElementById('submitBtn').textContent = 'Save Changes';
-        document.getElementById('resetBtn').style.display = 'block';
-        
+        document.getElementById("formTitle").textContent = "Edit Mapping Rule";
+        document.getElementById("submitBtn").textContent = "Save Changes";
+        document.getElementById("resetBtn").style.display = "block";
+
         // Scroll to form
-        document.querySelector('.card-header').scrollIntoView({ behavior: 'smooth' });
+        document
+            .querySelector(".card-header")
+            .scrollIntoView({ behavior: "smooth" });
     }
-    
+
     // Reset form to create mode
-    document.getElementById('resetBtn').addEventListener('click', function() {
-        const form = document.getElementById('mappingForm');
+    document.getElementById("resetBtn").addEventListener("click", function () {
+        const form = document.getElementById("mappingForm");
         form.reset();
-        form.action = "{{ url_for('add_category_mapping') }}";
-        document.getElementById('formTitle').textContent = 'Create New Rule';
-        document.getElementById('submitBtn').textContent = 'Create Rule';
-        this.style.display = 'none';
+        form.action = "{{ url_for('category.add_category_mapping') }}";
+        document.getElementById("formTitle").textContent = "Create New Rule";
+        document.getElementById("submitBtn").textContent = "Create Rule";
+        this.style.display = "none";
     });
-    
+
     // Download sample template
-    document.getElementById('downloadSampleBtn').addEventListener('click', function() {
-        // Create sample CSV content
-        const csvContent = [
-            'keyword,category,is_regex,priority',
-            'grocery,Food,false,5',
-            'restaurant,Food,false,5',
-            'uber,Transportation,false,5',
-            'netflix,Entertainment,false,5',
-            'doctor,Health,false,5',
-            '^att\\s,Housing,true,6'
-        ].join('\n');
-        
-        // Create download link
-        const blob = new Blob([csvContent], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.setAttribute('hidden', '');
-        a.setAttribute('href', url);
-        a.setAttribute('download', 'category_mappings_template.csv');
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-    });
-    
+    document
+        .getElementById("downloadSampleBtn")
+        .addEventListener("click", function () {
+            // Create sample CSV content
+            const csvContent = [
+                "keyword,category,is_regex,priority",
+                "grocery,Food,false,5",
+                "restaurant,Food,false,5",
+                "uber,Transportation,false,5",
+                "netflix,Entertainment,false,5",
+                "doctor,Health,false,5",
+                "^att\\s,Housing,true,6",
+            ].join("\n");
+
+            // Create download link
+            const blob = new Blob([csvContent], { type: "text/csv" });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.setAttribute("hidden", "");
+            a.setAttribute("href", url);
+            a.setAttribute("download", "category_mappings_template.csv");
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        });
+
     // Create default mappings
-    document.getElementById('createDefaultMappingsBtn').addEventListener('click', function() {
-        if (confirm('This will create a set of default mapping rules for common transactions. Continue?')) {
-            // Show loading state
-            this.disabled = true;
-            this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Creating Default Mappings...';
-            
-            // Send AJAX request to create default mappings
-            fetch('/category_mappings/create_defaults', {
-                method: 'POST',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert(`Successfully created ${data.count} default mapping rules!`);
-                    // Reload the page to show new mappings
-                    window.location.reload();
-                } else {
-                    alert(data.message || 'Failed to create default mappings.');
-                    this.disabled = false;
-                    this.innerHTML = '<i class="fas fa-magic me-2"></i>Create Default Mappings';
-                }
-            })
-            .catch(error => {
-                console.error('Error creating default mappings:', error);
-                alert('An error occurred while creating default mappings. Please try again.');
-                this.disabled = false;
-                this.innerHTML = '<i class="fas fa-magic me-2"></i>Create Default Mappings';
-            });
-        }
-    });
-    
+    document
+        .getElementById("createDefaultMappingsBtn")
+        .addEventListener("click", function () {
+            if (
+                confirm(
+                    "This will create a set of default mapping rules for common transactions. Continue?",
+                )
+            ) {
+                // Show loading state
+                this.disabled = true;
+                this.innerHTML =
+                    '<i class="fas fa-spinner fa-spin me-2"></i>Creating Default Mappings...';
+
+                // Send AJAX request to create default mappings
+                fetch("/category_mappings/create_defaults", {
+                    method: "POST",
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                })
+                    .then((response) => response.json())
+                    .then((data) => {
+                        if (data.success) {
+                            alert(
+                                `Successfully created ${data.count} default mapping rules!`,
+                            );
+                            // Reload the page to show new mappings
+                            window.location.reload();
+                        } else {
+                            alert(
+                                data.message ||
+                                    "Failed to create default mappings.",
+                            );
+                            this.disabled = false;
+                            this.innerHTML =
+                                '<i class="fas fa-magic me-2"></i>Create Default Mappings';
+                        }
+                    })
+                    .catch((error) => {
+                        console.error(
+                            "Error creating default mappings:",
+                            error,
+                        );
+                        alert(
+                            "An error occurred while creating default mappings. Please try again.",
+                        );
+                        this.disabled = false;
+                        this.innerHTML =
+                            '<i class="fas fa-magic me-2"></i>Create Default Mappings';
+                    });
+            }
+        });
+
     // Initialize the mappings table with DataTables for better sorting/filtering if available
-    document.addEventListener('DOMContentLoaded', function() {
-        if (typeof $.fn !== 'undefined' && typeof $.fn.DataTable !== 'undefined') {
-            $('#mappingsTable').DataTable({
-                "order": [[2, "desc"]], // Sort by priority by default
-                "pageLength": 10,
-                "language": {
-                    "search": "Search rules:",
-                    "paginate": {
-                        "first": "First",
-                        "last": "Last",
-                        "next": "Next",
-                        "previous": "Previous"
-                    }
-                }
+    document.addEventListener("DOMContentLoaded", function () {
+        if (
+            typeof $.fn !== "undefined" &&
+            typeof $.fn.DataTable !== "undefined"
+        ) {
+            $("#mappingsTable").DataTable({
+                order: [[2, "desc"]], // Sort by priority by default
+                pageLength: 10,
+                language: {
+                    search: "Search rules:",
+                    paginate: {
+                        first: "First",
+                        last: "Last",
+                        next: "Next",
+                        previous: "Previous",
+                    },
+                },
             });
         }
     });

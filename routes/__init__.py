@@ -29,7 +29,7 @@ def register_blueprints(app: Flask):
     app.register_blueprint(auth_bp)  # , url_prefix="/auth")
     app.register_blueprint(admin_bp, url_prefix="/admin")
     app.register_blueprint(budget_bp, url_prefix="/budgets")
-    app.register_blueprint(category_bp, url_prefix="/categories")
+    app.register_blueprint(category_bp)  # , url_prefix="/categories")
     app.register_blueprint(dashboard_bp, url_prefix="/dashboard")
     app.register_blueprint(expense_bp)  # , url_prefix="/expenses")
     app.register_blueprint(tag_bp, url_prefix="/tags")

@@ -122,7 +122,9 @@ def add_budget() -> Response:
         # Parse start date
         try:
             start_date: datetime = (
-                datetime.strptime(start_date_str, "%Y-%m-%d")
+                datetime.strptime(start_date_str, "%Y-%m-%d").replace(
+                    tzinfo=UTC
+                )
                 if start_date_str
                 else datetime.now(UTC)
             )
@@ -209,7 +211,7 @@ def edit_budget(budget_id) -> Response:
                 budget.start_date = datetime.strptime(
                     request.form.get("start_date"),  # type: ignore[]
                     "%Y-%m-%d",
-                )
+                ).replace(tzinfo=UTC)
 
         budget.is_recurring = request.form.get("is_recurring") == "on"
         budget.updated_at = datetime.now(UTC)
@@ -378,7 +380,8 @@ def get_budget_summary() -> dict[str, Any]:
             budget_summary["alert_budgets"].append(
                 {
                     "id": budget.id,
-                    "name": budget.name or budget.category.name,
+                    "name": budget.name
+                    or (budget.category.name if budget.category else "Unknown"),
                     "percentage": budget.get_progress_percentage(),
                     "status": status,
                     "amount": budget.amount,
@@ -390,7 +393,8 @@ def get_budget_summary() -> dict[str, Any]:
             budget_summary["alert_budgets"].append(
                 {
                     "id": budget.id,
-                    "name": budget.name or budget.category.name,
+                    "name": budget.name
+                    or (budget.category.name if budget.category else "Unknown"),
                     "percentage": budget.get_progress_percentage(),
                     "status": status,
                     "amount": budget.amount,
@@ -534,11 +538,11 @@ def get_subcategory_spending(budget_id) -> tuple[Response, int]:
 @budget_bp.route("/trends-data")
 @login_required_dev
 def budget_trends_data() -> tuple[Response, int]:  # noqa: PLR0915
-    """Get budget trends data for chart visualization with proper split handling."""
+    """Get budget trends data for chart visualization."""
     budget_id: str | None = request.args.get("budget_id")
 
     # Default time period (last 6 months)
-    end_date: datetime = datetime.now()
+    end_date: datetime = datetime.now(UTC)
     start_date: datetime = end_date - timedelta(days=180)
 
     # Prepare response data structure
@@ -570,7 +574,9 @@ def budget_trends_data() -> tuple[Response, int]:  # noqa: PLR0915
 
         # For each month, calculate total budget and spending
         for _, month in enumerate(response["labels"]):
-            month_date: datetime = datetime.strptime(month, "%b %Y")
+            month_date: datetime = datetime.strptime(month, "%b %Y").replace(
+                tzinfo=UTC
+            )
             month_start: datetime = month_date.replace(day=1)
             if month_date.month == 12:  # noqa: PLR2004
                 month_end: datetime = month_date.replace(
@@ -814,7 +820,7 @@ def budget_trends_data() -> tuple[Response, int]:  # noqa: PLR0915
 
         # Process each month
         for _, month in enumerate(response["labels"]):
-            month_date = datetime.strptime(month, "%b %Y")
+            month_date = datetime.strptime(month, "%b %Y").replace(tzinfo=UTC)
             month_start = month_date.replace(day=1)
             if month_date.month == 12:  # noqa: PLR2004
                 month_end = month_date.replace(
@@ -1120,7 +1126,7 @@ def budget_transactions(budget_id) -> tuple[Response, int]:  # noqa: PLR0915
     )
 
     # 2. Get expenses with category splits for these categories
-    split_expenses_query: Query[Expense] = (
+    split_expenses_query = (
         db.session.query(Expense)
         .join(CategorySplit, Expense.id == CategorySplit.expense_id)
         .filter(

@@ -626,11 +626,13 @@ def stats():
         expense_income_ratio = 100  # Default to 100% if no income
 
     # Provide placeholder values for other metrics
-    income_trend = 5.2  # Example value
-    liquidity_ratio = 3.5  # Example value
-    account_growth = 7.8  # Example value
+    income_trend = 0.0
+    liquidity_ratio = 0.0
+    account_growth = 0.0
 
-    user_accounts = db.session.query(Account).filter_by(user_id=current_user.id).all()
+    user_accounts = (
+        db.session.query(Account).filter_by(user_id=current_user.id).all()
+    )
 
     return render_template(
         "stats.html",

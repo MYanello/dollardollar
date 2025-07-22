@@ -1003,7 +1003,7 @@ def delete_category(category_id):
         current_app.logger.exception("Error deleting category %d", category_id)
         flash(f"Error deleting category: {e!s}")
 
-    return redirect(url_for("manage_categories"))
+    return redirect(url_for("category.manage_categories"))
 
 
 def update_category_mappings(transaction_id, category_id, learn=False):

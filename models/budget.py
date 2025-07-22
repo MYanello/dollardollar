@@ -12,7 +12,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from .base import Base
 
 if TYPE_CHECKING:
-    from models import Category, CategorySplit, Expense, User
+    from models import Category, User
 
 
 class Budget(Base):
@@ -98,6 +98,9 @@ class Budget(Base):
 
     def calculate_spent_amount(self):
         """Calculate spent amount in budget's category during the period."""
+        from database import db
+        from models import Category, CategorySplit, Expense
+
         start_date: datetime
         end_date: datetime
         start_date, end_date = self.get_current_period_dates()
@@ -173,9 +176,8 @@ class Budget(Base):
 
         # Find all category splits for relevant categories
         category_splits = (
-            CategorySplit.query.join(
-                Expense, CategorySplit.expense_id == Expense.id
-            )
+            db.session.query(CategorySplit)
+            .join(Expense, CategorySplit.expense_id == Expense.id)
             .filter(
                 Expense.user_id == self.user_id,
                 Expense.date >= start_date,
@@ -187,7 +189,7 @@ class Budget(Base):
 
         # Process each category split
         for cat_split in category_splits:
-            expense = Expense.query.get(cat_split.expense_id)
+            expense = db.session.query(Expense).get(cat_split.expense_id)
             if not expense:
                 continue
 
