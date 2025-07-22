@@ -17,7 +17,7 @@
     <!-- Create Group Form (Hidden by default) -->
     <div id="groupFormContainer" class="expense-form mb-4" style="display: none;">
         <h4 class="mb-3">Create New Group</h4>
-        <form action="{{ url_for('create_group') }}" method="POST">
+        <form action="{{ url_for('group.create_group') }}" method="POST">
             <div class="mb-3">
                 <label for="name" class="form-label">Group Name</label>
                 <input type="text" class="form-control bg-dark text-light" id="name" name="name" required>
@@ -62,7 +62,7 @@
                     </p>
                 </div>
                 <div class="card-footer bg-dark border-secondary">
-                    <a href="{{ url_for('group_details', group_id=group.id) }}" class="btn btn-primary btn-sm">
+                    <a href="{{ url_for('group.group_details', group_id=group.id) }}" class="btn btn-primary btn-sm">
                         View Details
                     </a>
                 </div>

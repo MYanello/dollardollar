@@ -35,7 +35,7 @@ def register_blueprints(app: Flask):
     app.register_blueprint(tag_bp, url_prefix="/tags")
     app.register_blueprint(recurring_bp, url_prefix="/recurring")
     app.register_blueprint(maintenance_bp, url_prefix="/maintenance")
-    app.register_blueprint(group_bp, url_prefix="/groups")
+    app.register_blueprint(group_bp)
     app.register_blueprint(settlement_bp)
     app.register_blueprint(currency_bp, url_prefix="/currencies")
     app.register_blueprint(transaction_bp)

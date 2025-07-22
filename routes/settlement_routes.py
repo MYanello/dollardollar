@@ -83,7 +83,7 @@ def add_settlement():
             ).replace(tzinfo=UTC)
         except ValueError:
             flash("Invalid date format. Please use YYYY-MM-DD format.")
-            return redirect(url_for("settlements"))
+            return redirect(url_for("settlement.settlements"))
 
         # Create settlement record
         settlement = Settlement(
@@ -101,4 +101,4 @@ def add_settlement():
     except Exception as e:
         flash(f"Error: {e!s}")
 
-    return redirect(url_for("settlements"))
+    return redirect(url_for("settlement.settlements"))
