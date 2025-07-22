@@ -1,12 +1,9 @@
 import hashlib
 import json
-import os
 import secrets
 from datetime import UTC, datetime
 
 from flask import current_app
-
-from app import create_default_categories
 
 """
 OIDC User Model Extensions for DollarDollar Bill Y'all
@@ -15,7 +12,7 @@ Provides OIDC integration for User model
 
 
 def extend_user_model(db, User):
-    """Extend the User model with OIDC methods.
+    """Extends the User model with OIDC methods
 
     Args:
         db: SQLAlchemy database instance
@@ -29,7 +26,7 @@ def extend_user_model(db, User):
     # Add OIDC user creation method
     @classmethod
     def from_oidc(cls, oidc_data, provider="authelia"):
-        """Create or update a user from OIDC data with security best practices."""
+        """Create or update a user from OIDC data with security best practices"""
         # Check if user exists by OIDC ID
         user = cls.query.filter_by(
             oidc_id=oidc_data.get("sub"), oidc_provider=provider
@@ -95,7 +92,7 @@ def extend_user_model(db, User):
             user.set_password(random_password)
 
             # Generate user color based on email
-            hash_object = hashlib.md5(user.id.encode())  # noqa: S324
+            hash_object = hashlib.md5(user.id.encode())
             hash_hex = hash_object.hexdigest()
             r = int(hash_hex[:2], 16)
             g = int(hash_hex[2:4], 16)
@@ -110,6 +107,9 @@ def extend_user_model(db, User):
             # Save to database
             db.session.add(user)
             db.session.commit()
+            from app import (
+                create_default_categories,  # Import at the top of the file if possible
+            )
 
             create_default_categories(user.id)
             # Add a log entry
@@ -132,7 +132,7 @@ def extend_user_model(db, User):
 
 
 def create_oidc_migration(directory="migrations/versions"):
-    """Create a migration script for adding OIDC fields to User model.
+    """Create a migration script for adding OIDC fields to User model
 
     Args:
         directory: Directory to save the migration file
@@ -141,6 +141,9 @@ def create_oidc_migration(directory="migrations/versions"):
         Path to the created migration file
 
     """
+    import os
+    from datetime import datetime
+
     # Create migration content
     migration_content = """\"\"\"Add OIDC support fields to users table
 
@@ -196,7 +199,7 @@ def downgrade():
     op.drop_column('users', 'last_login')
     op.drop_column('users', 'oidc_provider')
     op.drop_column('users', 'oidc_id')
-""".format(date=datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"))
+""".format(date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     # Ensure directory exists
     os.makedirs(directory, exist_ok=True)
