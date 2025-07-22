@@ -1,8 +1,8 @@
 # gocardless_client.py
 from collections import defaultdict
-from datetime import date, datetime, timedelta
-from datetime import timezone as tz
-from typing import Any, Callable, ClassVar, cast
+from collections.abc import Callable
+from datetime import UTC, date, datetime, timedelta
+from typing import Any, ClassVar, cast
 
 import requests
 from flask import Flask
@@ -199,9 +199,9 @@ class GoCardlessClient:
         """Get transaction for specified account id."""
         # Default values for dates
         if date_from is None:
-            date_from = (datetime.now(tz.utc) - timedelta(days=3)).date()
+            date_from = (datetime.now(UTC) - timedelta(days=3)).date()
         if date_to is None:
-            date_to = datetime.now(tz.utc).date()
+            date_to = datetime.now(UTC).date()
         if abs(date_to - date_from).days > max_days:
             self.app.logger.warning(
                 "Error fetching transactions for account %s, date length "
@@ -376,7 +376,7 @@ class GoCardlessClient:
                     else:
                         return None, False  # Skip zero-amount transactions
             except Exception as e:
-                self.app.logger.error(f"Error in transfer detection: {str(e)}")
+                self.app.logger.error(f"Error in transfer detection: {e!s}")
                 is_transfer = False
                 transaction_type = trans_data.get("transaction_type", "expense")
         else:
@@ -414,7 +414,7 @@ class GoCardlessClient:
                     )
                 except Exception as e:
                     self.app.logger.error(
-                        f"Error in auto-categorization: {str(e)}"
+                        f"Error in auto-categorization: {e!s}"
                     )
 
             # If auto-categorization didn't find a match but SimpleFin provided a category name,
@@ -431,7 +431,7 @@ class GoCardlessClient:
                         db_account.user_id,
                     )
                 except Exception as e:
-                    self.app.logger.error(f"Error in category lookup: {str(e)}")
+                    self.app.logger.error(f"Error in category lookup: {e!s}")
 
             # Set the category if we found one
             if category_id:

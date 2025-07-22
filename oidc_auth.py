@@ -2,10 +2,12 @@ import base64
 import hashlib
 import os
 import secrets
+from http.client import OK
 from urllib.parse import urlencode
 
 import requests
-from flask import current_app, flash, redirect, request, session, url_for
+from flask import current_app as app
+from flask import flash, redirect, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
 """
@@ -16,33 +18,30 @@ Provides OpenID Connect integration
 
 # OIDC helper functions
 def generate_code_verifier():
-    """Generate a secure code verifier for PKCE"""
+    """Generate a secure code verifier for PKCE."""
     code_verifier = secrets.token_urlsafe(64)
     # Ensure it's at most 128 characters
     return code_verifier[:128]
 
 
 def generate_code_challenge(code_verifier):
-    """Generate a code challenge from the code verifier"""
+    """Generate a code challenge from the code verifier."""
     code_challenge = hashlib.sha256(code_verifier.encode()).digest()
-    code_challenge = (
-        base64.urlsafe_b64encode(code_challenge).decode().rstrip("=")
-    )
-    return code_challenge
+    return base64.urlsafe_b64encode(code_challenge).decode().rstrip("=")
 
 
 def generate_state_token():
-    """Generate a secure state token to prevent CSRF"""
+    """Generate a secure state token to prevent CSRF."""
     return secrets.token_urlsafe(32)
 
 
 def set_oidc_session(key, value):
-    """Securely store OIDC data in session"""
+    """Securely store OIDC data in session."""
     session[f"oidc_{key}"] = value
 
 
 def get_oidc_session(key, default=None, delete=False):
-    """Securely retrieve OIDC data from session"""
+    """Securely retrieve OIDC data from session."""
     session_key = f"oidc_{key}"
     value = session.get(session_key, default)
     if delete and session_key in session:
@@ -51,12 +50,12 @@ def get_oidc_session(key, default=None, delete=False):
 
 
 def is_oidc_enabled():
-    """Check if OIDC authentication is enabled"""
-    return current_app.config.get("OIDC_ENABLED", False)
+    """Check if OIDC authentication is enabled."""
+    return app.config.get("OIDC_ENABLED", False)
 
 
-def setup_oidc_config(app):
-    """Configure OIDC settings from environment variables using discovery endpoint"""
+def setup_oidc_config(app):  # noqa: PLR0915
+    """Configure OIDC settings from environment variables using discovery endpoint."""
     oidc_enabled = os.getenv("OIDC_ENABLED", "False").lower() == "true"
 
     # Configure LOCAL_LOGIN_DISABLE regardless of OIDC status
@@ -84,17 +83,17 @@ def setup_oidc_config(app):
                     issuer = f"{issuer}/"
                 discovery_url = f"{issuer}.well-known/openid-configuration"
                 app.logger.info(
-                    f"Constructed discovery URL from issuer: {discovery_url}"
+                    "Constructed discovery URL from issuer: %s", discovery_url
                 )
 
         if discovery_url:
             try:
                 # Fetch OpenID configuration from discovery endpoint
                 app.logger.info(
-                    f"Fetching OIDC configuration from: {discovery_url}"
+                    "Fetching OIDC configuration from: %s", discovery_url
                 )
                 response = requests.get(discovery_url, timeout=10)
-                if response.status_code == 200:
+                if response.status_code == OK:
                     config = response.json()
 
                     # Set OIDC endpoints from discovery document
@@ -126,10 +125,8 @@ def setup_oidc_config(app):
                     app.logger.error(
                         f"Failed to fetch OIDC configuration from {discovery_url}: {response.status_code}"
                     )
-            except Exception as e:
-                app.logger.error(
-                    f"Error loading OIDC discovery document: {e!s}"
-                )
+            except Exception:
+                app.logger.exception("Error loading OIDC discovery document")
 
         # Fall back to individually specified endpoints if discovery failed
         # or specific endpoints are missing
@@ -199,12 +196,12 @@ def setup_oidc_config(app):
     return oidc_enabled
 
 
-def register_oidc_routes(app, User, db):
-    """Register OIDC routes with the Flask application"""
+def register_oidc_routes(app, user, db):
+    """Register OIDC routes with the Flask application."""
 
     @app.route("/login/oidc")
     def login_oidc():
-        """Initiate OIDC authentication with PKCE flow for enhanced security"""
+        """Initiate OIDC authentication with PKCE flow for enhanced security."""
         if not is_oidc_enabled():
             flash("OIDC authentication is not enabled.")
             return redirect(url_for("login"))
@@ -228,9 +225,9 @@ def register_oidc_routes(app, User, db):
             # Build authorization request URL
             params = {
                 "response_type": "code",
-                "client_id": current_app.config["OIDC_CLIENT_ID"],
-                "redirect_uri": current_app.config["OIDC_REDIRECT_URI"],
-                "scope": " ".join(current_app.config["OIDC_SCOPES"]),
+                "client_id": app.config["OIDC_CLIENT_ID"],
+                "redirect_uri": app.config["OIDC_REDIRECT_URI"],
+                "scope": " ".join(app.config["OIDC_SCOPES"]),
                 "state": state,
                 "code_challenge": code_challenge,
                 "code_challenge_method": "S256",
@@ -247,21 +244,17 @@ def register_oidc_routes(app, User, db):
             if login_hint:
                 params["login_hint"] = login_hint
 
-            auth_url = (
-                f"{current_app.config['OIDC_AUTH_URI']}?{urlencode(params)}"
-            )
+            auth_url = f"{app.config['OIDC_AUTH_URI']}?{urlencode(params)}"
             return redirect(auth_url)
 
-        except Exception as e:
-            current_app.logger.error(
-                f"Error initiating OIDC authentication: {e!s}"
-            )
+        except Exception:
+            app.logger.exception("Error initiating OIDC authentication")
             flash("An error occurred while initiating authentication.")
             return redirect(url_for("auth.login"))
 
     @app.route("/oidc/callback")
     def oidc_callback():
-        """Handle OIDC callback with proper security validation"""
+        """Handle OIDC callback with proper security validation."""
         if not is_oidc_enabled():
             flash("OIDC authentication is not enabled.")
             return redirect(url_for("auth.login"))
@@ -277,18 +270,14 @@ def register_oidc_routes(app, User, db):
             stored_state = get_oidc_session("state", delete=True)
 
             if not callback_state or callback_state != stored_state:
-                current_app.logger.warning(
-                    "Invalid state parameter in OIDC callback"
-                )
+                app.logger.warning("Invalid state parameter in OIDC callback")
                 flash("Authentication failed: Invalid state parameter.")
                 return redirect(url_for("auth.login"))
 
             # Get the code verifier from session
             code_verifier = get_oidc_session("code_verifier", delete=True)
             if not code_verifier:
-                current_app.logger.warning(
-                    "Missing code verifier in OIDC callback"
-                )
+                app.logger.warning("Missing code verifier in OIDC callback")
                 flash("Authentication failed: Missing code verifier.")
                 return redirect(url_for("auth.login"))
 
@@ -296,23 +285,23 @@ def register_oidc_routes(app, User, db):
             token_data = {
                 "grant_type": "authorization_code",
                 "code": code,
-                "redirect_uri": current_app.config["OIDC_REDIRECT_URI"],
-                "client_id": current_app.config["OIDC_CLIENT_ID"],
-                "client_secret": current_app.config["OIDC_CLIENT_SECRET"],
+                "redirect_uri": app.config["OIDC_REDIRECT_URI"],
+                "client_id": app.config["OIDC_CLIENT_ID"],
+                "client_secret": app.config["OIDC_CLIENT_SECRET"],
                 "code_verifier": code_verifier,
             }
 
             # Make token request
             token_response = requests.post(
-                current_app.config["OIDC_TOKEN_URI"],
+                app.config["OIDC_TOKEN_URI"],
                 data=token_data,
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
                 timeout=10,
             )
 
-            if token_response.status_code != 200:
-                current_app.logger.error(
-                    f"Token exchange failed: {token_response.text}"
+            if token_response.status_code != OK:
+                app.logger.error(
+                    "Token exchange failed: %s", token_response.text
                 )
                 flash("Authentication failed: Unable to validate credentials.")
                 return redirect(url_for("auth.login"))
@@ -326,14 +315,14 @@ def register_oidc_routes(app, User, db):
 
             # Get user info from userinfo endpoint
             userinfo_response = requests.get(
-                current_app.config["OIDC_USERINFO_URI"],
+                app.config["OIDC_USERINFO_URI"],
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
                 timeout=10,
             )
 
-            if userinfo_response.status_code != 200:
-                current_app.logger.error(
-                    f"Userinfo request failed: {userinfo_response.text}"
+            if userinfo_response.status_code != OK:
+                app.logger.error(
+                    "Userinfo request failed: %s", userinfo_response.text
                 )
                 flash(
                     "Authentication failed: Unable to retrieve user information."
@@ -344,7 +333,7 @@ def register_oidc_routes(app, User, db):
 
             # Verify we got basic required user info
             if "sub" not in user_info:
-                current_app.logger.error("Missing sub claim in OIDC userinfo")
+                app.logger.error("Missing sub claim in OIDC userinfo")
                 flash(
                     "Authentication failed: Incomplete user information received."
                 )
@@ -366,15 +355,15 @@ def register_oidc_routes(app, User, db):
             )
             return redirect(redirect_to)
 
-        except Exception as e:
-            current_app.logger.error(f"Error processing OIDC callback: {e!s}")
+        except Exception:
+            app.logger.exception("Error processing OIDC callback")
             flash("An error occurred during authentication. Please try again.")
             return redirect(url_for("auth.login"))
 
     @app.route("/logout/oidc")
     @login_required
     def logout_oidc():
-        """Properly handle complete logout for both local and OIDC sessions"""
+        """Properly handle complete logout for both local and OIDC sessions."""
         if not is_oidc_enabled():
             return redirect(url_for("logout"))
 
@@ -388,7 +377,7 @@ def register_oidc_routes(app, User, db):
         id_token = get_oidc_session("id_token", None, delete=True)
 
         # Get the logout endpoint
-        logout_endpoint = current_app.config.get("OIDC_LOGOUT_URI")
+        logout_endpoint = app.config.get("OIDC_LOGOUT_URI")
 
         # Log out from the app first
         logout_user()
@@ -401,7 +390,8 @@ def register_oidc_routes(app, User, db):
             if key.startswith("oidc_"):
                 session.pop(key, None)
 
-        # If we have both a logout endpoint and this was an OIDC user, try to perform a complete logout
+        # If we have both a logout endpoint and this was an OIDC user,
+        # try to perform a complete logout
         if logout_endpoint and has_oidc and id_token:
             try:
                 # Build the post-logout redirect URL
@@ -415,20 +405,17 @@ def register_oidc_routes(app, User, db):
                 }
 
                 # Build the complete URL with parameters
-                from urllib.parse import urlencode
 
                 full_logout_url = (
                     f"{logout_endpoint}?{urlencode(logout_params)}"
                 )
 
-                current_app.logger.info(
-                    f"Redirecting to OIDC provider logout: {full_logout_url}"
+                app.logger.info(
+                    "Redirecting to OIDC provider logout: %s", full_logout_url
                 )
                 return redirect(full_logout_url)
-            except Exception as e:
-                current_app.logger.error(
-                    f"Error during OIDC logout redirect: {e!s}"
-                )
+            except Exception:
+                app.logger.exception("Error during OIDC logout redirect")
                 # Continue to local logout fallback if there's an error
 
         # Default behavior: redirect to the app's login page directly

@@ -1,5 +1,4 @@
-from datetime import datetime, timedelta
-from datetime import timezone as tz
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from flask import (
@@ -86,12 +85,12 @@ def process_token() -> Response:
         )
 
         # Usually 30 days after the token was obtained
-        refresh_expiration: datetime = datetime.now(tz.utc) + timedelta(
+        refresh_expiration: datetime = datetime.now(UTC) + timedelta(
             seconds=int(tokens["refresh_expires"])
         )
 
         # Usually 24 hours after the token was obtained
-        access_expiration: datetime = datetime.now(tz.utc) + timedelta(
+        access_expiration: datetime = datetime.now(UTC) + timedelta(
             seconds=int(tokens["access_expires"])
         )
 
@@ -222,7 +221,7 @@ def process_bank() -> Response | str:
         "balances" in access_scope,
         "details" in access_scope,
         "transactions" in access_scope,
-        datetime.now(tz.utc) + timedelta(days=int(access_valid)),
+        datetime.now(UTC) + timedelta(days=int(access_valid)),
     )
     req = Requisition(requisition["id"], current_user.id, bank, agreement["id"])
     db.session.add(agr)
@@ -394,7 +393,7 @@ def add_accounts() -> Response | str:
 
         if existing_account:
             existing_account.balance = 0.0
-            existing_account.last_sync = datetime.now(tz.utc)
+            existing_account.last_sync = datetime.now(UTC)
             existing_account.currency_code = currency
             existing_account.import_source = "gocardless"
             existing_account.type = acc_type
@@ -406,7 +405,7 @@ def add_accounts() -> Response | str:
                 institution=institution,
                 user_id=current_user.id,
                 currency_code=currency,
-                last_sync=datetime.now(tz.utc),
+                last_sync=datetime.now(UTC),
                 import_source="gocardless",
                 external_id=details[account]["iban"],
                 status="active",
