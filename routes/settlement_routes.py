@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user
@@ -18,7 +18,8 @@ def settlements():
     # Get all settlements involving the current user
     base_currency = get_base_currency()
     settlements = (
-        Settlement.query.filter(
+        db.session.query(Settlement)
+        .filter(
             or_(
                 Settlement.payer_id == current_user.id,
                 Settlement.receiver_id == current_user.id,
@@ -29,7 +30,7 @@ def settlements():
     )
 
     # Get all users
-    users = User.query.all()
+    users = db.session.query(User).all()
 
     # Calculate balances between users
     balances = calculate_balances(current_user.id)
@@ -79,7 +80,7 @@ def add_settlement():
         try:
             settlement_date = datetime.strptime(
                 request.form["date"], "%Y-%m-%d"
-            )
+            ).replace(tzinfo=UTC)
         except ValueError:
             flash("Invalid date format. Please use YYYY-MM-DD format.")
             return redirect(url_for("settlements"))

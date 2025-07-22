@@ -1,5 +1,4 @@
-from datetime import datetime
-from datetime import timezone as tz
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, ClassVar
 
 from sqlalchemy import ForeignKey, String
@@ -44,9 +43,7 @@ class Settlement(Base):
         init=False,
     )
 
-    date: Mapped[datetime] = mapped_column(
-        nullable=False, default=datetime.now(tz.utc)
-    )
+    date: Mapped[datetime] = mapped_column(nullable=False, default=UTC)
     description: Mapped[str] = mapped_column(
         String(200), nullable=True, default="Settlement"
     )

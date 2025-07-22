@@ -96,7 +96,7 @@ ignore = [
     "PLE0605",
 
     "PLR0912", # too many functions and too complex to fix this for now
-    "C901"
+    "C901",
 ]
 
 [tool.pytest.ini_options]

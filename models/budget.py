@@ -98,8 +98,8 @@ class Budget(Base):
 
     def calculate_spent_amount(self):
         """Calculate spent amount in budget's category during the period."""
-        from database import db
-        from models import Category, CategorySplit, Expense
+        from database import db # noqa: PLC0415
+        from models import Category, CategorySplit, Expense # noqa: PLC0415
 
         start_date: datetime
         end_date: datetime
@@ -231,8 +231,8 @@ class Budget(Base):
     def get_status(self):
         """Return the budget status: 'under', 'approaching', 'over'."""
         percentage = self.get_progress_percentage()
-        if percentage >= 100:
+        if percentage >= 100:  # noqa: PLR2004
             return "over"
-        if percentage >= 80:
+        if percentage >= 80: # noqa: PLR2004
             return "approaching"
         return "under"
