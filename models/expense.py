@@ -197,7 +197,7 @@ class Expense(Base):
 
         for user_id in split_with_ids:
             user: User | None = (
-                db.session.query(User)
+                db.select(User)
                 .filter(User.id == user_id.strip())
                 .first()
             )

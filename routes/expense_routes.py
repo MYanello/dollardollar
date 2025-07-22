@@ -106,10 +106,10 @@ def add_expense():  # noqa: PLR0915
 
             # Find the currencies
             selected_currency = (
-                db.session.query(Currency).filter_by(code=currency_code).first()
+                db.select(Currency).filter_by(code=currency_code).first()
             )
             base_currency = (
-                db.session.query(Currency).filter_by(is_base=True).first()
+                db.select(Currency).filter_by(is_base=True).first()
             )
 
             if not selected_currency or not base_currency:
@@ -363,7 +363,7 @@ def update_expense(expense_id):  # noqa: PLR0915
             expense.category_id = None
 
             # Clear any existing splits
-            db.session.query(CategorySplit).filter_by(
+            db.select(CategorySplit).filter_by(
                 expense_id=expense.id
             ).delete()
 
@@ -434,7 +434,7 @@ def update_expense(expense_id):  # noqa: PLR0915
                     )
 
             # Clear any existing splits when not using splits
-            db.session.query(CategorySplit).filter_by(
+            db.select(CategorySplit).filter_by(
                 expense_id=expense.id
             ).delete()
 

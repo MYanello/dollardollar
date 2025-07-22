@@ -40,7 +40,7 @@ def profile() -> str:
     )
 
     # Get available currencies for default currency selection
-    currencies: list[Currency] = db.session.query(Currency).all()
+    currencies: list[Currency] = db.select(Currency).all()
 
     # Check if OIDC is enabled
     oidc_enabled: bool = current_app.config.get("OIDC_ENABLED", False)

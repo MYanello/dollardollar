@@ -25,7 +25,7 @@ currency_bp = Blueprint("currency", __name__)
 @currency_bp.route("/")
 @login_required_dev
 def manage_currencies() -> str:
-    currencies: list[Currency] = db.session.query(Currency).all()
+    currencies: list[Currency] = db.select(Currency).all()
     return render_template("currencies.html", currencies=currencies)
 
 
@@ -52,7 +52,7 @@ def add_currency() -> Response:
 
     # Check if currency already exists
     existing: Currency | None = (
-        db.session.query(Currency).filter_by(code=code).first()
+        db.select(Currency).filter_by(code=code).first()
     )
     if existing:
         flash(f"Currency {code} already exists")
@@ -61,7 +61,7 @@ def add_currency() -> Response:
     # If setting as base, update all existing base currencies
     if is_base:
         for currency in (
-            db.session.query(Currency).filter_by(is_base=True).all()
+            db.select(Currency).filter_by(is_base=True).all()
         ):
             currency.is_base = False
 
@@ -93,7 +93,7 @@ def update_currency(code):
         return redirect(url_for("currency.manage_currencies"))
 
     currency: Currency | None = (
-        db.session.query(Currency).filter_by(code=code).first()
+        db.select(Currency).filter_by(code=code).first()
     )
     if not currency:
         abort(404)
@@ -108,7 +108,7 @@ def update_currency(code):
 
     # If setting as base, update all existing base currencies
     if new_is_base and not currency.is_base:
-        for curr in db.session.query(Currency).filter_by(is_base=True).all():
+        for curr in db.select(Currency).filter_by(is_base=True).all():
             curr.is_base = False
 
     currency.is_base = new_is_base
@@ -143,7 +143,7 @@ def delete_currency(code) -> tuple[Response, int]:
     try:
         # Find the currency
         currency: Currency | None = (
-            db.session.query(Currency).filter_by(code=code).first()
+            db.select(Currency).filter_by(code=code).first()
         )
 
         if not currency:
@@ -204,7 +204,7 @@ def set_base_currency(code) -> Response:
     try:
         # Find the currency to be set as base
         new_base_currency: Currency | None = (
-            db.session.query(Currency).filter_by(code=code).first()
+            db.select(Currency).filter_by(code=code).first()
         )
 
         if not new_base_currency:
@@ -215,7 +215,7 @@ def set_base_currency(code) -> Response:
 
         # Find and unset the current base currency
         current_base_currency: Currency | None = (
-            db.session.query(Currency).filter_by(is_base=True).first()
+            db.select(Currency).filter_by(is_base=True).first()
         )
 
         if current_base_currency:
@@ -280,7 +280,7 @@ def set_default_currency() -> Response:
 
     # Verify currency exists
     currency: Currency | None = (
-        db.session.query(Currency).filter_by(code=currency_code).first()
+        db.select(Currency).filter_by(code=currency_code).first()
     )
     if not currency:
         flash("Invalid currency selected")

@@ -69,7 +69,7 @@ def signup() -> Response | str:
         password: str = request.form.get("password")  # type: ignore[]
         name: str = request.form.get("name")  # type: ignore[]
 
-        if db.session.query(User).filter_by(id=email).first():
+        if db.select(User).filter_by(id=email).first():
             flash("Email already registered")
             return redirect(url_for("auth.signup"))
 
@@ -99,7 +99,7 @@ def signup() -> Response | str:
         user.set_password(password)
 
         # Make first user admin
-        is_first_user: bool = db.session.query(User).count() == 0
+        is_first_user: bool = db.select(User).count() == 0
         if is_first_user:
             user.is_admin = True
 
@@ -145,7 +145,7 @@ def login() -> Response | str:
         and not current_user.is_authenticated
     ):
         dev_user: User | None = (
-            db.session.query(User).filter_by(id=DEV_USER_EMAIL).first()
+            db.select(User).filter_by(id=DEV_USER_EMAIL).first()
         )
         if not dev_user:
             dev_user = User(id=DEV_USER_EMAIL, name="Developer", is_admin=True)
@@ -171,7 +171,7 @@ def login() -> Response | str:
 
         email: str = request.form.get("email")  # type: ignore[]
         password: str = request.form.get("password")  # type: ignore[]
-        user = db.session.query(User).filter_by(id=email).first()
+        user = db.select(User).filter_by(id=email).first()
 
         if user and user.check_password(password):
             login_user(user)
@@ -182,7 +182,7 @@ def login() -> Response | str:
                 try:
                     # Check if user has SimpleFin connection
                     simplefin_settings: SimpleFinSettings | None = (
-                        db.session.query(SimpleFinSettings)
+                        db.select(SimpleFinSettings)
                         .filter_by(user_id=user.id, enabled=True)
                         .first()
                     )

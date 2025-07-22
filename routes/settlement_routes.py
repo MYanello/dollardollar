@@ -18,7 +18,7 @@ def settlements():
     # Get all settlements involving the current user
     base_currency = get_base_currency()
     settlements = (
-        db.session.query(Settlement)
+        db.select(Settlement)
         .filter(
             or_(
                 Settlement.payer_id == current_user.id,
@@ -30,7 +30,7 @@ def settlements():
     )
 
     # Get all users
-    users = db.session.query(User).all()
+    users = db.select(User).all()
 
     # Calculate balances between users
     balances = calculate_balances(current_user.id)

@@ -65,7 +65,7 @@ def stats():
 
     # Execute the query with all filters
     expenses = (
-        db.session.query(Expense)
+        db.select(Expense)
         .filter(and_(*query_filters))
         .order_by(Expense.date.desc())
         .all()
@@ -81,7 +81,7 @@ def stats():
         Settlement.date <= end_date,
     ]
     settlements = (
-        db.session.query(Settlement)
+        db.select(Settlement)
         .filter(and_(*settlement_filters))
         .order_by(Settlement.date)
         .all()
@@ -172,7 +172,7 @@ def stats():
 
             # Add category information for the expense
             if hasattr(expense, "category_id") and expense.category_id:
-                category = db.session.query(Category).get(expense.category_id)
+                category = db.select(Category).get(expense.category_id)
                 if category:
                     expense_data["category_name"] = category.name
                     expense_data["category_icon"] = category.icon
@@ -216,7 +216,7 @@ def stats():
     previous_total = 0
 
     previous_expenses = (
-        db.session.query(Expense).filter(and_(*previous_period_filters)).all()
+        db.select(Expense).filter(and_(*previous_period_filters)).all()
     )
 
     # Process previous expenses and calculate total
@@ -400,7 +400,7 @@ def stats():
 
     # Add each group's total for current user
     groups = (
-        db.session.query(Group)
+        db.select(Group)
         .join(group_users)
         .filter(group_users.c.user_id == current_user.id)
         .all()
@@ -425,7 +425,7 @@ def stats():
     # Try to get all user categories
     try:
         for category in (
-            db.session.query(Category).filter_by(user_id=current_user.id).all()
+            db.select(Category).filter_by(user_id=current_user.id).all()
         ):
             if not category.parent_id:  # Only top-level categories
                 user_categories[category.id] = {
@@ -457,7 +457,7 @@ def stats():
             )
 
             # Fetch the actual expense object
-            expense_obj = db.session.query(Expense).get(expense_data["id"])
+            expense_obj = db.select(Expense).get(expense_data["id"])
 
             if (
                 expense_obj
@@ -468,7 +468,7 @@ def stats():
                 app.logger.info("Found category_id: %s", cat_id)
 
                 # If it's a subcategory, use parent category ID instead
-                category = db.session.query(Category).get(cat_id)
+                category = db.select(Category).get(cat_id)
                 if (
                     category
                     and category.parent_id
@@ -559,7 +559,7 @@ def stats():
     # Try to get tag information
     try:
         for expense_data in current_user_expenses:
-            expense_obj = db.session.query(Expense).get(expense_data["id"])
+            expense_obj = db.select(Expense).get(expense_data["id"])
             if expense_obj and hasattr(expense_obj, "tags"):
                 for tag in expense_obj.tags:
                     if tag.id not in tag_data:
@@ -631,7 +631,7 @@ def stats():
     account_growth = 0.0
 
     user_accounts = (
-        db.session.query(Account).filter_by(user_id=current_user.id).all()
+        db.select(Account).filter_by(user_id=current_user.id).all()
     )
 
     return render_template(

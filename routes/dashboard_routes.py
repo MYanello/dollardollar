@@ -30,7 +30,7 @@ def dashboard() -> str:  # noqa: PLR0915
     # Fetch all expenses where the user is either
     # the creator or a split participant
     expenses: list[Expense] = (
-        db.session.query(Expense)
+        db.select(Expense)
         .filter(
             or_(
                 Expense.user_id == current_user.id,
@@ -41,9 +41,9 @@ def dashboard() -> str:  # noqa: PLR0915
         .all()
     )
 
-    users: list[User] = db.session.query(User).all()
+    users: list[User] = db.select(User).all()
     groups: list[Group] = (
-        db.session.query(Group)
+        db.select(Group)
         .join(group_users)
         .filter(group_users.c.user_id == current_user.id)
         .all()
@@ -288,12 +288,12 @@ def dashboard() -> str:  # noqa: PLR0915
     budget_summary: dict[str, Any] = get_budget_summary()
 
     categories: list[Category] = (
-        db.session.query(Category)
+        db.select(Category)
         .filter_by(user_id=current_user.id)
         .order_by(Category.name)
         .all()
     )
-    currencies: list[Currency] = db.session.query(Currency).all()
+    currencies: list[Currency] = db.select(Currency).all()
 
     # Calculate asset and debt trends
     asset_debt_trends: dict[str, Any] = calculate_asset_debt_trends(

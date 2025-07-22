@@ -55,7 +55,7 @@ def detect_internal_transfer(description, amount, account_id=None):
         # Try to identify the destination account
         # Get all user accounts
         user_accounts = (
-            db.session.query(Account)
+            db.select(Account)
             .filter(Account.user_id == current_user.id)
             .all()
         )
@@ -88,7 +88,7 @@ def auto_categorize_transaction(description: str, user_id) -> None | int:  # noq
 
     # Get all active category mappings for the user
     mappings: list[CategoryMapping] = (
-        db.session.query(CategoryMapping)
+        db.select(CategoryMapping)
         .filter_by(user_id=user_id, active=True)
         .order_by(
             CategoryMapping.priority.desc(), CategoryMapping.match_count.desc()
@@ -175,7 +175,7 @@ def get_category_id(  # noqa: PLR0911
     if category_name:
         # Try to find an exact match first
         category: Category | None = (
-            db.session.query(Category)
+            db.select(Category)
             .filter(
                 Category.user_id == user_id if user_id else current_user.id,
                 func.lower(Category.name) == func.lower(category_name),
@@ -188,7 +188,7 @@ def get_category_id(  # noqa: PLR0911
 
         # Try to find a partial match in subcategories
         subcategory: Category | None = (
-            db.session.query(Category)
+            db.select(Category)
             .filter(
                 Category.user_id == user_id if user_id else current_user.id,
                 Category.parent_id.isnot(None),
@@ -202,7 +202,7 @@ def get_category_id(  # noqa: PLR0911
 
         # Try to find a partial match in parent categories
         parent_category: Category | None = (
-            db.session.query(Category)
+            db.select(Category)
             .filter(
                 Category.user_id == user_id if user_id else current_user.id,
                 Category.parent_id.is_(None),
@@ -218,7 +218,7 @@ def get_category_id(  # noqa: PLR0911
         if "auto_categorize" in request.form:
             # Find "Other" category as parent
             other_category: Category | None = (
-                db.session.query(Category)
+                db.select(Category)
                 .filter_by(
                     name="Other",
                     user_id=user_id if user_id else current_user.id,
@@ -284,7 +284,7 @@ def normalize_time_series(data, target_length):
 def get_category_name(expense) -> str | None:
     """Get the category name for an expense."""
     if hasattr(expense, "category_id") and expense.category_id:
-        category: Category | None = db.session.query(Category).get(
+        category: Category | None = db.select(Category).get(
             expense.category_id
         )
         if category:
@@ -323,7 +323,7 @@ def check_db_structure(app: Flask):
             app.logger.warning(
                 "Missing user_color column in users table - adding it now"
             )
-            db.session.execute(
+            db.select(execute(
                 text(
                     "ALTER TABLE users ADD COLUMN user_color VARCHAR(7) "
                     'DEFAULT "#15803d"'
