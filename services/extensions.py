@@ -8,8 +8,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine.base import Engine
 
 import models  # noqa: F401  # Required for model discovery
-from gocardless_client import GoCardlessClient
 from models.base import Base
+from services.gocardless_client import GoCardlessClient
 
 """
 Flask extensions module.
