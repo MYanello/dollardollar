@@ -102,3 +102,8 @@ ignore = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "ipython>=9.4.0",
+]

@@ -62,7 +62,7 @@ def create_group():
     except Exception as e:  # noqa: BLE001
         flash(f"Error creating group: {e!s}")
 
-    return redirect(url_for("groups"))
+    return redirect(url_for("group.groups"))
 
 
 @group_bp.route("/groups/<int:group_id>")
@@ -74,7 +74,7 @@ def group_details(group_id):
     # Check if user is member of group
     if current_user not in group.members:
         flash("Access denied. You are not a member of this group.")
-        return redirect(url_for("groups"))
+        return redirect(url_for("group.groups"))
     categories = (
         db.select(Category)
         .filter_by(user_id=current_user.id)
@@ -107,7 +107,7 @@ def add_group_member(group_id):
     group = db.get_or_404(Group, group_id)
     if current_user != group.creator:
         flash("Only group creator can add members")
-        return redirect(url_for("group_details", group_id=group_id))
+        return redirect(url_for("group.group_details", group_id=group_id))
 
     member_id = request.form.get("user_id")
     user = db.select(User).filter_by(id=member_id).first()
@@ -125,7 +125,7 @@ def add_group_member(group_id):
                 "Failed to send group invitation email"
             )
 
-    return redirect(url_for("group_details", group_id=group_id))
+    return redirect(url_for("group.group_details", group_id=group_id))
 
 
 @group_bp.route(
@@ -136,7 +136,7 @@ def remove_group_member(group_id, member_id):
     group = db.get_or_404(Group, group_id)
     if current_user != group.creator:
         flash("Only group creator can remove members")
-        return redirect(url_for("group_details", group_id=group_id))
+        return redirect(url_for("group.group_details", group_id=group_id))
 
     user = db.select(User).filter_by(id=member_id).first()
     if user and user in group.members and user != group.creator:
@@ -144,7 +144,7 @@ def remove_group_member(group_id, member_id):
         db.session.commit()
         flash(f"{user.name} removed from group!")
 
-    return redirect(url_for("group_details", group_id=group_id))
+    return redirect(url_for("group.group_details", group_id=group_id))
 
 
 @group_bp.route("/groups/<int:group_id>/delete", methods=["GET", "POST"])
@@ -157,7 +157,7 @@ def delete_group(group_id):
     # Security check: Only the creator can delete the group
     if current_user.id != group.created_by:
         flash("Only the group creator can delete the group", "error")
-        return redirect(url_for("group_details", group_id=group_id))
+        return redirect(url_for("group.group_details", group_id=group_id))
 
     # GET request shows confirmation prompt, POST actually deletes
     if request.method == "GET":
@@ -173,7 +173,7 @@ def delete_group(group_id):
             f"associated transactions. This action cannot be undone.",
             "warning",
         )
-        return redirect(url_for("group_details", group_id=group_id))
+        return redirect(url_for("group.group_details", group_id=group_id))
 
     # POST request (actual deletion)
     try:
@@ -203,13 +203,13 @@ def delete_group(group_id):
         else:
             flash(f'Group "{group_name}" has been deleted', "success")
 
-        return redirect(url_for("groups"))
+        return redirect(url_for("group.groups"))
 
     except Exception as e:
         db.session.rollback()
         current_app.logger.exception("Error deleting group %s", group_id)
         flash(f"Error deleting group: {e!s}", "error")
-        return redirect(url_for("group_details", group_id=group_id))
+        return redirect(url_for("group.group_details", group_id=group_id))
 
 
 def send_group_invitation_email(user, group, inviter):

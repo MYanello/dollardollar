@@ -2,14 +2,14 @@ import calendar
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_
+from sqlalchemy import and_, select
 
 from app import Expense, RecurringExpense
 from database import db
 
 
 def detect_recurring_transactions(user_id, lookback_days=60, min_occurrences=2):
-    """Detect potential recurring transactions for a user based on transaction history.
+    """Detect potential recurring transactions based on transaction history.
 
     Parameters
     ----------
@@ -29,17 +29,20 @@ def detect_recurring_transactions(user_id, lookback_days=60, min_occurrences=2):
 
     # Query user's transactions in the period
     transactions = (
-        db.select(Expense)
-        .filter(
-            and_(
-                Expense.user_id == user_id,
-                Expense.date >= start_date,
-                Expense.date <= end_date,
-                # Exclude transactions that are already from recurring sources
-                Expense.recurring_id.is_(None),
+        db.session.execute(
+            select(Expense)
+            .filter(
+                and_(
+                    Expense.user_id == user_id,
+                    Expense.date >= start_date,
+                    Expense.date <= end_date,
+                    # Exclude transactions that are already from recurring sources
+                    Expense.recurring_id.is_(None),
+                )
             )
+            .order_by(Expense.date)
         )
-        .order_by(Expense.date)
+        .scalars()
         .all()
     )
 

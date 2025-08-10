@@ -32,7 +32,7 @@ def connect_simplefin():
             "SimpleFin integration is not enabled. "
             "Please contact the administrator."
         )
-        return redirect(url_for("advanced"))
+        return redirect(url_for("account.advanced"))
 
     # Get the URL for users to obtain their setup token
     setup_token_url = simplefin_client.get_setup_token_instructions()
@@ -47,18 +47,18 @@ def process_simplefin_token():  # noqa: PLR0911
     """Process the setup token provided by the user."""
     if not current_app.config["SIMPLEFIN_ENABLED"]:
         flash("SimpleFin integration is not enabled.")
-        return redirect(url_for("advanced"))
+        return redirect(url_for("account.advanced"))
 
     setup_token = request.form.get("setup_token")
     if not setup_token:
         flash("No setup token provided.")
-        return redirect(url_for("advanced"))
+        return redirect(url_for("account.advanced"))
 
     # Decode the setup token to get the claim URL
     claim_url = simplefin_client.decode_setup_token(setup_token)
     if not claim_url:
         flash("Invalid setup token. Please try again.")
-        return redirect(url_for("advanced"))
+        return redirect(url_for("account.advanced"))
 
     # Claim the access URL
     access_url = simplefin_client.claim_access_url(claim_url)
@@ -67,14 +67,14 @@ def process_simplefin_token():  # noqa: PLR0911
             "Failed to claim access URL. "
             "Please try again with a new setup token."
         )
-        return redirect(url_for("advanced"))
+        return redirect(url_for("account.advanced"))
 
     if not simplefin_client.test_access_url(access_url):
         flash(
             "The access URL appears to be invalid. "
             "Please try again with a new setup token."
         )
-        return redirect(url_for("advanced"))
+        return redirect(url_for("account.advanced"))
 
     encoded_access_url = base64.b64encode(access_url.encode()).decode()
 
@@ -111,7 +111,7 @@ def process_simplefin_token():  # noqa: PLR0911
         db.session.rollback()
         current_app.logger.exception("Error saving SimpleFin settings")
         flash(f"Error saving SimpleFin settings: {e!s}")
-        return redirect(url_for("advanced"))
+        return redirect(url_for("account.advanced"))
 
 
 @simplefin_bp.route("/simplefin/fetch_accounts")
@@ -120,7 +120,7 @@ def simplefin_fetch_accounts():
     """Fetch accounts and transactions from SimpleFin."""
     if not current_app.config["SIMPLEFIN_ENABLED"]:
         flash("SimpleFin integration is not enabled.")
-        return redirect(url_for("advanced"))
+        return redirect(url_for("account.advanced"))
 
     try:
         # Get the user's SimpleFin settings
@@ -133,7 +133,7 @@ def simplefin_fetch_accounts():
                 "No SimpleFin connection found. "
                 "Please connect with SimpleFin first."
             )
-            return redirect(url_for("advanced"))
+            return redirect(url_for("account.advanced"))
 
         # Decode the access URL
         access_url = base64.b64decode(
@@ -147,7 +147,7 @@ def simplefin_fetch_accounts():
 
         if not raw_data:
             flash("Failed to fetch accounts and transactions from SimpleFin.")
-            return redirect(url_for("advanced"))
+            return redirect(url_for("account.advanced"))
 
         # Process the raw data
         accounts = simplefin_client.process_raw_accounts(raw_data)
@@ -162,7 +162,7 @@ def simplefin_fetch_accounts():
     except Exception as e:
         current_app.logger.exception("Error fetching SimpleFin accounts")
         flash(f"Error fetching accounts: {e!s}")
-        return redirect(url_for("advanced"))
+        return redirect(url_for("account.advanced"))
 
 
 @simplefin_bp.route("/simplefin/add_accounts", methods=["POST"])
@@ -173,7 +173,7 @@ def simplefin_add_accounts():  # noqa: PLR0915
     account_ids = request.form.getlist("account_ids")
     if not account_ids:
         flash("No accounts selected.")
-        return redirect(url_for("advanced"))
+        return redirect(url_for("account.advanced"))
 
     try:
         # Get the user's SimpleFin settings
@@ -185,7 +185,7 @@ def simplefin_add_accounts():  # noqa: PLR0915
             flash(
                 "No SimpleFin connection found. Please reconnect with SimpleFin."
             )
-            return redirect(url_for("advanced"))
+            return redirect(url_for("account.advanced"))
 
         # Decode the access URL
         access_url = base64.b64decode(
@@ -199,7 +199,7 @@ def simplefin_add_accounts():  # noqa: PLR0915
 
         if not raw_data:
             flash("Failed to fetch accounts from SimpleFin. Please try again.")
-            return redirect(url_for("advanced"))
+            return redirect(url_for("account.advanced"))
 
         # Process the raw data
         accounts = simplefin_client.process_raw_accounts(raw_data)

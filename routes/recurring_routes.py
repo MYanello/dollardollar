@@ -13,7 +13,7 @@ from flask import (
     url_for,
 )
 from flask_login import current_user
-from sqlalchemy import or_
+from sqlalchemy import or_, select
 
 from database import db
 from models import (
@@ -39,27 +39,35 @@ recurring_bp = Blueprint("recurring", __name__)
 def recurring():
     base_currency = get_base_currency()
     recurring_expenses = (
-        db.select(RecurringExpense)
-        .filter(
-            or_(
-                RecurringExpense.user_id == current_user.id,
-                RecurringExpense.split_with.like(f"%{current_user.id}%"),
+        db.session.execute(
+            select(RecurringExpense).filter(
+                or_(
+                    RecurringExpense.user_id == current_user.id,
+                    RecurringExpense.split_with.like(f"%{current_user.id}%"),
+                )
             )
         )
+        .scalars()
         .all()
     )
-    users = db.select(User).all()
+    users = db.session.execute(select(User)).scalars().all()
     groups = (
-        db.select(Group)
-        .join(group_users)
-        .filter(group_users.c.user_id == current_user.id)
+        db.session.execute(
+            select(Group)
+            .join(group_users)
+            .filter(group_users.c.user_id == current_user.id)
+        )
+        .scalars()
         .all()
     )
-    currencies = db.select(Currency).all()
+    currencies = db.session.execute(select(Currency)).scalars().all()
     categories = (
-        db.select(Category)
-        .filter_by(user_id=current_user.id)
-        .order_by(Category.name)
+        db.session.execute(
+            select(Category)
+            .filter_by(user_id=current_user.id)
+            .order_by(Category.name)
+        )
+        .scalars()
         .all()
     )
     return render_template(
@@ -78,20 +86,26 @@ def recurring():
 def get_recurring_form_html():
     """Return the HTML for the add recurring transaction form."""
     base_currency = get_base_currency()
-    users = db.select(User).all()
+    users = db.session.execute(select(User)).scalars().all()
     groups = (
-        db.select(Group)
-        .join(group_users)
-        .filter(group_users.c.user_id == current_user.id)
+        db.session.execute(
+            select(Group)
+            .join(group_users)
+            .filter(group_users.c.user_id == current_user.id)
+        )
+        .scalars()
         .all()
     )
     categories = (
-        db.select(Category)
-        .filter_by(user_id=current_user.id)
-        .order_by(Category.name)
+        db.session.execute(
+            select(Category)
+            .filter_by(user_id=current_user.id)
+            .order_by(Category.name)
+        )
+        .scalars()
         .all()
     )
-    currencies = db.select(Currency).all()
+    currencies = db.session.execute(select(Currency)).scalars().all()
 
     return render_template(
         "partials/recurring_transaction_form.html",
@@ -122,7 +136,7 @@ def add_recurring():  # noqa: PLR0915
                 ).replace(tzinfo=UTC)
         except ValueError:
             flash("Invalid date format. Please use YYYY-MM-DD format.")
-            return redirect(url_for("recurring"))
+            return redirect(url_for("recurring.recurring"))
 
         # Handle account_id vs card_used transition
         account_id = request.form.get("account_id")
@@ -142,7 +156,13 @@ def add_recurring():  # noqa: PLR0915
                 except:  # noqa: E722
                     # If account lookup fails, use a default
                     card_used = "Default Card"
-
+        if transaction_type == "expense":
+            paid_by = request.form["paid_by"]
+            split_method = request.form["split_method"]
+        else:
+            # For income/transfer, use defaults or form values
+            paid_by = request.form.get("paid_by", current_user.id)
+            split_method = request.form.get("split_method", "equal")
         # Create new recurring expense with common fields
         recurring_expense = RecurringExpense(
             description=request.form["description"],
@@ -154,6 +174,8 @@ def add_recurring():  # noqa: PLR0915
             user_id=current_user.id,
             transaction_type=transaction_type,
             active=True,
+            split_method=split_method,
+            paid_by=paid_by,
         )
 
         # Handle account_id if provided
@@ -190,7 +212,7 @@ def add_recurring():  # noqa: PLR0915
                         "Please select at least one person to "
                         "split with or mark as personal expense."
                     )
-                    return redirect(url_for("recurring"))
+                    return redirect(url_for("recurring.recurring"))
 
                 recurring_expense.split_with = (
                     ",".join(split_with_ids) if split_with_ids else None
@@ -248,7 +270,7 @@ def add_recurring():  # noqa: PLR0915
 
         # Create first expense instance if the start date is today
         # or in the past
-        today = datetime.now().replace(
+        today = datetime.now(UTC).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
         if start_date <= today:
@@ -263,7 +285,7 @@ def add_recurring():  # noqa: PLR0915
         current_app.logger.exception("Error adding recurring transaction:")
         flash(f"Error: {e!s}")
 
-    return redirect(url_for("recurring"))
+    return redirect(url_for("recurring.recurring"))
 
 
 @recurring_bp.route("/toggle_recurring/<int:recurring_id>", methods=["POST"])
@@ -274,7 +296,7 @@ def toggle_recurring(recurring_id):
     # Security check
     if recurring_expense.user_id != current_user.id:
         flash("You don't have permission to modify this recurring expense")
-        return redirect(url_for("recurring"))
+        return redirect(url_for("recurring.recurring"))
 
     # Toggle the active status
     recurring_expense.active = not recurring_expense.active
@@ -283,7 +305,7 @@ def toggle_recurring(recurring_id):
     status = "activated" if recurring_expense.active else "deactivated"
     flash(f"Recurring expense {status} successfully")
 
-    return redirect(url_for("recurring"))
+    return redirect(url_for("recurring.recurring"))
 
 
 @recurring_bp.route("/delete_recurring/<int:recurring_id>", methods=["POST"])
@@ -294,14 +316,14 @@ def delete_recurring(recurring_id):
     # Security check
     if recurring_expense.user_id != current_user.id:
         flash("You don't have permission to delete this recurring expense")
-        return redirect(url_for("recurring"))
+        return redirect(url_for("recurring.recurring"))
 
     db.session.delete(recurring_expense)
     db.session.commit()
 
     flash("Recurring expense deleted successfully")
 
-    return redirect(url_for("recurring"))
+    return redirect(url_for("recurring.recurring"))
 
 
 @recurring_bp.route("/edit_recurring/<int:recurring_id>")
@@ -314,7 +336,7 @@ def edit_recurring_page(recurring_id):
     # Security check: Only the creator can edit
     if recurring.user_id != current_user.id:
         flash("You do not have permission to edit this recurring expense")
-        return redirect(url_for("recurring"))
+        return redirect(url_for("recurring.recurring"))
 
     # Prepare the same data needed for the recurring page
     base_currency = get_base_currency()
@@ -370,7 +392,7 @@ def update_recurring(recurring_id):  # noqa: PLR0915
             flash(
                 "You do not have permission to edit this recurring transaction"
             )
-            return redirect(url_for("recurring"))
+            return redirect(url_for("recurring.recurring"))
 
         # Get transaction type
         transaction_type = request.form.get("transaction_type", "expense")
@@ -387,7 +409,7 @@ def update_recurring(recurring_id):  # noqa: PLR0915
                 ).replace(tzinfo=UTC)
         except ValueError:
             flash("Invalid date format. Please use YYYY-MM-DD format.")
-            return redirect(url_for("recurring"))
+            return redirect(url_for("recurring.recurring"))
 
         # Update basic fields for all transaction types
         recurring.description = request.form["description"]
@@ -506,7 +528,7 @@ def update_recurring(recurring_id):  # noqa: PLR0915
         )
         flash(f"Error: {e!s}")
 
-    return redirect(url_for("recurring"))
+    return redirect(url_for("recurring.recurring"))
 
 
 @recurring_bp.route("/detect_recurring_transactions")
@@ -535,8 +557,12 @@ def get_recurring_transactions():
 
         # Get all ignored patterns for this user
         ignored_patterns = (
-            db.select(IgnoredRecurringPattern)
-            .filter_by(user_id=current_user.id)
+            db.session.execute(
+                select(IgnoredRecurringPattern).filter_by(
+                    user_id=current_user.id
+                )
+            )
+            .scalars()
             .all()
         )
         ignored_keys = [pattern.pattern_key for pattern in ignored_patterns]
@@ -770,7 +796,7 @@ def convert_to_recurring(candidate_id):
             # Check if this is a regular form submission or AJAX request
             if request.headers.get("X-Requested-With") != "XMLHttpRequest":
                 flash("Recurring expense created successfully!")
-                return redirect(url_for("recurring"))
+                return redirect(url_for("recurring.recurring"))
 
             return jsonify(
                 {
