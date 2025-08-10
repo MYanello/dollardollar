@@ -27,14 +27,14 @@ def add_tag():
     )
     if existing_tag:
         flash("Tag with this name already exists")
-        return redirect(url_for("manage_tags"))
+        return redirect(url_for("tag.manage_tags"))
 
     tag = Tag(name=name, color=color, user_id=current_user.id)
     db.session.add(tag)
     db.session.commit()
 
     flash("Tag added successfully")
-    return redirect(url_for("manage_tags"))
+    return redirect(url_for("tags.manage_tags"))
 
 
 @tag_bp.route("/tags/delete/<int:tag_id>", methods=["POST"])
@@ -45,10 +45,10 @@ def delete_tag(tag_id):
     # Check if tag belongs to current user
     if tag.user_id != current_user.id:
         flash("You don't have permission to delete this tag")
-        return redirect(url_for("manage_tags"))
+        return redirect(url_for("tag.manage_tags"))
 
     db.session.delete(tag)
     db.session.commit()
 
     flash("Tag deleted successfully")
-    return redirect(url_for("manage_tags"))
+    return redirect(url_for("tag.manage_tags"))

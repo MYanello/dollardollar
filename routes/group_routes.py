@@ -10,6 +10,7 @@ from flask import (
 )
 from flask_login import current_user
 from flask_mail import Message
+from sqlalchemy import select
 
 from database import db
 from extensions import mail
@@ -76,20 +77,26 @@ def group_details(group_id):
         flash("Access denied. You are not a member of this group.")
         return redirect(url_for("group.groups"))
     categories = (
-        db.select(Category)
-        .filter_by(user_id=current_user.id)
-        .order_by(Category.name)
+        db.session.execute(
+            select(Category)
+            .filter_by(user_id=current_user.id)
+            .order_by(Category.name)
+        )
+        .scalars()
         .all()
     )
 
     expenses = (
-        db.select(Expense)
-        .filter_by(group_id=group_id)
-        .order_by(Expense.date.desc())
+        db.session.execute(
+            select(Expense)
+            .filter_by(group_id=group_id)
+            .order_by(Expense.date.desc())
+        )
+        .scalars()
         .all()
     )
-    all_users = db.select(User).all()
-    currencies = db.select(Currency).all()
+    all_users = db.session.execute(select(User)).scalars().all()
+    currencies = db.session.execute(select(Currency)).scalars().all()
     return render_template(
         "group_details.html",
         group=group,

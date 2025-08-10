@@ -62,7 +62,7 @@
                 <!-- Add Member Form (Hidden by default) -->
                 {% if current_user == group.creator %}
                 <div id="memberFormContainer" class="card-body border-bottom" style="display: none;">
-                    <form action="{{ url_for('add_group_member', group_id=group.id) }}" method="POST">
+                    <form action="{{ url_for('group.add_group_member', group_id=group.id) }}" method="POST">
                         <div class="mb-3">
                             <label for="user_id" class="form-label">Select User</label>
                             <select class="form-select bg-dark text-light" id="user_id" name="user_id" required>
@@ -248,7 +248,7 @@
                                 {% endfor %}
                                 
                                 {% if current_user.tags|length == 0 %}
-                                <p class="text-muted small">No tags created yet. <a href="{{ url_for('manage_tags') }}" class="text-warning">Create tags</a> to categorize expenses.</p>
+                                <p class="text-muted small">No tags created yet. <a href="{{ url_for('tag.manage_tags') }}" class="text-warning">Create tags</a> to categorize expenses.</p>
                                 {% endif %}
                             </div>
                         </div>
