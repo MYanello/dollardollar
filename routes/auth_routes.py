@@ -18,7 +18,6 @@ from werkzeug import Response
 from database import db
 from models import User
 from models.simplefin import SimpleFinSettings
-from recurring_detection import detect_recurring_transactions
 from services.const import DEV_USER_EMAIL, DEV_USER_PASSWORD
 from services.defaults import create_default_budgets, create_default_categories
 from services.helpers import (
@@ -26,6 +25,7 @@ from services.helpers import (
     send_welcome_email,
     sync_simplefin_for_user,
 )
+from services.recurring_detection import detect_recurring_transactions
 from services.wrappers import login_required_dev, restrict_demo_access
 from session_timeout import DemoTimeout
 

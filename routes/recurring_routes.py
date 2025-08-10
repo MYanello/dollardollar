@@ -26,8 +26,8 @@ from models import (
     RecurringExpense,
     User,
 )
-from recurring_detection import detect_recurring_transactions
 from services.helpers import get_base_currency
+from services.recurring_detection import detect_recurring_transactions
 from services.tables import group_users
 from services.wrappers import login_required_dev
 
@@ -726,7 +726,9 @@ def recurring_candidate_history(candidate_id):
 @login_required_dev
 def convert_to_recurring(candidate_id):
     """Convert a detected recurring transaction to a RecurringExpense."""
-    from recurring_detection import create_recurring_expense_from_detection
+    from services.recurring_detection import (
+        create_recurring_expense_from_detection,
+    )
 
     try:
         # Check if this is an edit request

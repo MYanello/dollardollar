@@ -34,7 +34,7 @@ from routes import register_blueprints
 from services.extensions import init_db, login_manager, mail, migrate, scheduler
 from services.helpers import init_default_currencies
 from services.oidc.oidc_auth import register_oidc_routes, setup_oidc_config
-from services.oidc_user import extend_user_model
+from services.oidc.oidc_user import extend_user_model
 from services.util import check_db_structure, detect_internal_transfer
 from session_timeout import DemoTimeout
 from simplefin_client import SimpleFin
@@ -107,11 +107,11 @@ app.config["MAIL_DEFAULT_SENDER"] = os.getenv(
     "MAIL_DEFAULT_SENDER", os.getenv("MAIL_USERNAME")
 )
 
-app.config["TIMEZONE"] = "EST"  # Default timezone
 
 # Initialize scheduler
 # scheduler = APScheduler()
-scheduler.timezone = pytz.timezone("EST")  # Explicitly set scheduler to use EST
+app.config["TIMEZONE"] = "America/New_York"  # Default timezone
+app.config["SCHEDULER_TIMEZONE"] = "America/New_York"  # Set scheduler timezone
 scheduler.init_app(app)
 logging.basicConfig(level=getattr(logging, app.config["LOG_LEVEL"]))
 
