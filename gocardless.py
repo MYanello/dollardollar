@@ -21,7 +21,7 @@ from models.account import Account
 from models.currency import Currency
 from models.expense import Expense
 from models.gocardless import Agreement, Requisition
-from util import (
+from services.util import (
     auto_categorize_transaction,
     detect_internal_transfer,
     get_category_id,
