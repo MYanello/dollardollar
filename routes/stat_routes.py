@@ -8,8 +8,8 @@ from sqlalchemy import and_, or_
 from database import db
 from models import Account, Category, Expense, Group, Settlement
 from services.helpers import calculate_balances, get_base_currency
+from services.tables import group_users
 from services.wrappers import login_required_dev
-from tables import group_users
 
 stat_bp = Blueprint("stat", __name__)
 

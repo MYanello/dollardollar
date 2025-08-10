@@ -24,7 +24,7 @@ from models import (
     Tag,
     User,
 )
-from tables import expense_tags
+from services.tables import expense_tags
 
 
 def get_category_spending(expenses, expense_splits):

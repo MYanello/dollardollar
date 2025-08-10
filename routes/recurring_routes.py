@@ -28,8 +28,8 @@ from models import (
 )
 from recurring_detection import detect_recurring_transactions
 from services.helpers import get_base_currency
+from services.tables import group_users
 from services.wrappers import login_required_dev
-from tables import group_users
 
 recurring_bp = Blueprint("recurring", __name__)
 

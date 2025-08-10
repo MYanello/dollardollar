@@ -8,7 +8,7 @@ from sqlalchemy.orm import (
     relationship,
 )
 
-from tables import expense_tags
+from services.tables import expense_tags
 
 from .base import Base
 from .user import User

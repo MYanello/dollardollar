@@ -11,7 +11,7 @@ from sqlalchemy.orm import (
 )
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from tables import group_users
+from services.tables import group_users
 
 from .base import Base
 from .group import Group

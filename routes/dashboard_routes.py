@@ -16,7 +16,7 @@ from services.helpers import (
 )
 from services.wrappers import login_required_dev
 from session_timeout import demo_time_limited
-from tables import group_users
+from services.tables import group_users
 
 dashboard_bp = Blueprint("dashboard", __name__)
 

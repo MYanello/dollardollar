@@ -9,7 +9,7 @@ from sqlalchemy.orm import (
     relationship,
 )
 
-from tables import group_users
+from services.tables import group_users
 
 from .base import Base
 

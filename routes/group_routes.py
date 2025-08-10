@@ -17,8 +17,8 @@ from extensions import mail
 from models import Category, Currency, Expense, Group, User
 from services.defaults import create_default_categories
 from services.helpers import get_base_currency
+from services.tables import group_users
 from services.wrappers import login_required_dev
-from tables import group_users
 
 group_bp = Blueprint("group", __name__)
 
