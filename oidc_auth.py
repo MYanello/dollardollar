@@ -10,6 +10,8 @@ from flask import current_app as app
 from flask import flash, redirect, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
+from models import User
+
 """
 OIDC Authentication module for DollarDollar Bill Y'all
 Provides OpenID Connect integration

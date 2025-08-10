@@ -1,9 +1,14 @@
 import hashlib
 import json
+import os
 import secrets
 from datetime import UTC, datetime
 
 from flask import current_app
+
+from services.defaults import (
+    create_default_categories,  # Import at the top of the file if possible
+)
 
 """
 OIDC User Model Extensions for DollarDollar Bill Y'all
@@ -12,7 +17,7 @@ Provides OIDC integration for User model
 
 
 def extend_user_model(db, User):
-    """Extends the User model with OIDC methods
+    """Extend the User model with OIDC methods.
 
     Args:
         db: SQLAlchemy database instance
@@ -26,11 +31,13 @@ def extend_user_model(db, User):
     # Add OIDC user creation method
     @classmethod
     def from_oidc(cls, oidc_data, provider="authelia"):
-        """Create or update a user from OIDC data with security best practices"""
+        """Create or update a user from OIDC data with security best practices."""  # noqa: E501
         # Check if user exists by OIDC ID
-        user = cls.query.filter_by(
-            oidc_id=oidc_data.get("sub"), oidc_provider=provider
-        ).first()
+        user = (
+            db.session.query(cls)
+            .filter_by(oidc_id=oidc_data.get("sub"), oidc_provider=provider)
+            .first()
+        )
 
         # If not found, check by email, but only if we have a verified email
         if not user and "email" in oidc_data:
@@ -40,7 +47,11 @@ def extend_user_model(db, User):
             )  # Default to True for providers that don't send this
 
             if email_verified:
-                user = cls.query.filter_by(id=oidc_data["email"]).first()
+                user = (
+                    db.session.query(cls)
+                    .filter_by(id=oidc_data["email"])
+                    .first()
+                )
 
         # If user exists, update OIDC details if needed
         if user:
@@ -76,7 +87,7 @@ def extend_user_model(db, User):
             )
 
             # Check if this will be the first user
-            is_first_user = cls.query.count() == 0
+            is_first_user = db.session.query(cls).count() == 0
 
             # Create the user object
             user = cls(
@@ -107,9 +118,6 @@ def extend_user_model(db, User):
             # Save to database
             db.session.add(user)
             db.session.commit()
-            from app import (
-                create_default_categories,  # Import at the top of the file if possible
-            )
 
             create_default_categories(user.id)
             # Add a log entry
@@ -132,7 +140,7 @@ def extend_user_model(db, User):
 
 
 def create_oidc_migration(directory="migrations/versions"):
-    """Create a migration script for adding OIDC fields to User model
+    """Create a migration script for adding OIDC fields to User model.
 
     Args:
         directory: Directory to save the migration file
@@ -141,9 +149,6 @@ def create_oidc_migration(directory="migrations/versions"):
         Path to the created migration file
 
     """
-    import os
-    from datetime import datetime
-
     # Create migration content
     migration_content = """\"\"\"Add OIDC support fields to users table
 
@@ -199,7 +204,7 @@ def downgrade():
     op.drop_column('users', 'last_login')
     op.drop_column('users', 'oidc_provider')
     op.drop_column('users', 'oidc_id')
-""".format(date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+""".format(date=datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"))
 
     # Ensure directory exists
     os.makedirs(directory, exist_ok=True)
