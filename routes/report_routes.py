@@ -7,8 +7,8 @@ from flask_mail import Message
 from sqlalchemy import and_, or_
 
 from database import db
-from extensions import mail
 from models import Budget, Expense, User
+from services.extensions import mail
 from services.helpers import calculate_balances, get_base_currency
 from services.wrappers import login_required_dev
 

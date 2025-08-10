@@ -8,7 +8,6 @@ from flask_mail import Message
 from sqlalchemy import delete, func, or_
 
 from database import db
-from extensions import mail
 from models import (
     Account,
     Budget,
@@ -24,6 +23,7 @@ from models import (
     Tag,
     User,
 )
+from services.extensions import mail
 from services.tables import expense_tags
 
 

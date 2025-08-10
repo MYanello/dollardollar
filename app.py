@@ -19,7 +19,6 @@ from sqlalchemy import and_, or_
 
 from config import get_config
 from database import db
-from extensions import init_db, login_manager, mail, migrate, scheduler
 from models import (
     Account,
     Budget,
@@ -34,6 +33,7 @@ from models import (
 from oidc_auth import register_oidc_routes, setup_oidc_config
 from oidc_user import extend_user_model
 from routes import register_blueprints
+from services.extensions import init_db, login_manager, mail, migrate, scheduler
 from services.helpers import init_default_currencies
 from services.util import check_db_structure, detect_internal_transfer
 from session_timeout import DemoTimeout

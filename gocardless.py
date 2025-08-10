@@ -15,12 +15,12 @@ from flask_login import current_user, login_required
 from werkzeug import Response
 
 from database import db
-from extensions import gocardless_client as client
 from models import GoCardlessSettings
 from models.account import Account
 from models.currency import Currency
 from models.expense import Expense
 from models.gocardless import Agreement, Requisition
+from services.extensions import gocardless_client as client
 from services.util import (
     auto_categorize_transaction,
     detect_internal_transfer,

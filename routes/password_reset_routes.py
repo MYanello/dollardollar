@@ -4,8 +4,8 @@ from flask_login import current_user
 from flask_mail import Message
 
 from database import db
-from extensions import mail
 from models import User
+from services.extensions import mail
 
 password_bp = Blueprint("password", __name__)
 
