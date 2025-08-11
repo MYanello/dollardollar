@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class Category(Base):
     """Stores category information."""
 
-    __tablename__: ClassVar[str] = "categories"
+    __tablename__ = "categories"
 
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     name: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -85,7 +85,7 @@ class Category(Base):
 class CategorySplit(Base):
     """Stores category split information."""
 
-    __tablename__: ClassVar[str] = "category_splits"
+    __tablename__ = "category_splits"
 
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     expense_id: Mapped[int] = mapped_column(
@@ -114,7 +114,7 @@ class CategorySplit(Base):
 class CategoryMapping(Base):
     """Stores information about a category mapping."""
 
-    __tablename__: ClassVar[str] = "category_mappings"
+    __tablename__ = "category_mappings"
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     user_id: Mapped[str] = mapped_column(
         String(120), ForeignKey("users.id"), nullable=False

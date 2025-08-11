@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING
 
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import (
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class Settlement(Base):
     """Stores settlement information."""
 
-    __tablename__: ClassVar[str] = "settlements"
+    __tablename__ = "settlements"
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     payer_id: Mapped[str] = mapped_column(
         String(120), ForeignKey("users.id"), nullable=False

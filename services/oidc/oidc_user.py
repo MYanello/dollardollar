@@ -122,14 +122,17 @@ def extend_user_model(db, User):
             create_default_categories(user.id)
             # Add a log entry
             current_app.logger.info(
-                f"New user created via OIDC: {user.id}, Admin: {is_first_user}"
+                "New user created via OIDC: %s, Admin: %s",
+                user.id,
+                is_first_user,
             )
 
             return user
 
         # If we can't create a user (no email), log and return None
         current_app.logger.error(
-            f"Cannot create user from OIDC data: Missing email. Data: {json.dumps(oidc_data)}"
+            "Cannot create user from OIDC data: Missing email. Data: %s",
+            json.dumps(oidc_data),
         )
         return None
 

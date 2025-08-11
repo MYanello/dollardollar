@@ -1,5 +1,6 @@
+import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, ClassVar, Optional, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.orm import (
@@ -28,7 +29,7 @@ if TYPE_CHECKING:
 class Expense(Base):
     """Store expense information."""
 
-    __tablename__: ClassVar[str] = "expenses"
+    __tablename__ = "expenses"
 
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     description: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -230,8 +231,6 @@ class Expense(Base):
         if self.split_details:
             try:
                 if isinstance(self.split_details, str):
-                    import json
-
                     split_details = json.loads(self.split_details)
                 elif isinstance(self.split_details, dict):
                     split_details = self.split_details

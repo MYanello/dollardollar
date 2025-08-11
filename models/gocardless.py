@@ -1,7 +1,6 @@
+from datetime import UTC, timedelta
 from datetime import datetime as dt
-from datetime import timedelta
-from datetime import timezone as tz
-from typing import TYPE_CHECKING, Any, ClassVar, Optional
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import ForeignKey, String, Text, case, func
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -21,7 +20,7 @@ if TYPE_CHECKING:
 class Agreement(Base):
     """Stores information about GoCardless user agreements."""
 
-    __tablename__: ClassVar[str] = "GoCardless_agreements"
+    __tablename__ = "GoCardless_agreements"
 
     id: Mapped[str] = mapped_column(primary_key=True)
     user_id: Mapped[str] = mapped_column(
@@ -38,13 +37,13 @@ class Agreement(Base):
         "Requisition", back_populates="agreement", lazy=True
     )
 
-    created_at: Mapped[dt] = mapped_column(default=dt.now(tz.utc))
+    created_at: Mapped[dt] = mapped_column(default=dt.now(UTC))
 
     @hybrid_property
     def expired(self) -> bool:  # type: ignore[reportRedeclaration]
         return (
             self.created_at + timedelta(days=self.access_valid_for_days)
-        ) < dt.now(tz.utc)
+        ) < dt.now(UTC)
 
     @expired.expression
     @classmethod
@@ -61,7 +60,7 @@ class Agreement(Base):
 class Requisition(Base):
     """Stores information about GoCardless requisitions."""
 
-    __tablename__: ClassVar[str] = "GoCardless_requisitions"
+    __tablename__ = "GoCardless_requisitions"
 
     id: Mapped[str] = mapped_column(primary_key=True)
     user_id: Mapped[str] = mapped_column(
@@ -80,13 +79,13 @@ class Requisition(Base):
         "Agreement", back_populates="requisitions", lazy=True
     )
 
-    created_at: Mapped[dt] = mapped_column(default=dt.now(tz.utc))
+    created_at: Mapped[dt] = mapped_column(default=dt.now(UTC))
 
 
 class GoCardlessSettings(Base):
     """Stores GoCardless connection settings for a user."""
 
-    __tablename__: ClassVar[str] = "GoCardless"
+    __tablename__ = "GoCardless"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[str] = mapped_column(
@@ -99,20 +98,20 @@ class GoCardlessSettings(Base):
     user: Mapped["User"] = relationship(
         "User", back_populates="gocardless", uselist=False, lazy=True
     )
-    last_sync: Mapped[Optional[dt]] = mapped_column(default=None)
+    last_sync: Mapped[dt | None] = mapped_column(default=None)
 
-    temp_accounts: Mapped[Optional[str]] = mapped_column(Text, default=None)
+    temp_accounts: Mapped[str | None] = mapped_column(Text, default=None)
 
-    access_token_expiration: Mapped[dt] = mapped_column(default=dt.now(tz.utc))
-    refresh_token_expiration: Mapped[dt] = mapped_column(default=dt.now(tz.utc))
+    access_token_expiration: Mapped[dt] = mapped_column(default=dt.now(UTC))
+    refresh_token_expiration: Mapped[dt] = mapped_column(default=dt.now(UTC))
     enabled: Mapped[bool] = mapped_column(default=True)
     sync_frequency: Mapped[str] = mapped_column(
         String(20), default="daily"
     )  # 'daily', 'weekly', etc.
-    created_at: Mapped[dt] = mapped_column(default=dt.now(tz.utc))
+    created_at: Mapped[dt] = mapped_column(default=dt.now(UTC))
     updated_at: Mapped[dt] = mapped_column(
-        default=dt.now(tz.utc),
-        onupdate=dt.now(tz.utc),
+        default=dt.now(UTC),
+        onupdate=dt.now(UTC),
     )
 
     def __repr__(self):

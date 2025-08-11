@@ -1,6 +1,5 @@
 from datetime import UTC, datetime
-from datetime import timezone as tz
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING
 
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import (
@@ -20,7 +19,7 @@ if TYPE_CHECKING:
 class Group(Base):
     """Stores group information and settings."""
 
-    __tablename__: ClassVar[str] = "groups"
+    __tablename__ = "groups"
 
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)

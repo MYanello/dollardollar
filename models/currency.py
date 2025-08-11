@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING
 
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 class Currency(Base):
     """Stores currency information."""
 
-    __tablename__: ClassVar[str] = "currencies"
+    __tablename__ = "currencies"
 
     code: Mapped[str] = mapped_column(
         String(3), primary_key=True

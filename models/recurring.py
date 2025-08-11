@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, ClassVar, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import (
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 class RecurringExpense(Base):
     """Store recurring expense information."""
 
-    __tablename__: ClassVar[str] = "recurring_expenses"
+    __tablename__ = "recurring_expenses"
 
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     description: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -154,7 +154,7 @@ class RecurringExpense(Base):
 class IgnoredRecurringPattern(Base):
     """Store patterns of recurring transactions, a user has chosen to ignore."""
 
-    __tablename__: ClassVar[str] = "ignored_recurring_patterns"
+    __tablename__ = "ignored_recurring_patterns"
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     user_id: Mapped[str] = mapped_column(
         String(120), ForeignKey("users.id"), nullable=False

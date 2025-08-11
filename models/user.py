@@ -1,6 +1,6 @@
 import secrets
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, ClassVar, Optional
+from typing import TYPE_CHECKING, Optional
 
 from flask_login import UserMixin
 from sqlalchemy import ForeignKey, String
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 class User(Base, UserMixin):
     """Stores user information and settings."""
 
-    __tablename__: ClassVar[str] = "users"
+    __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(
         String(120), primary_key=True

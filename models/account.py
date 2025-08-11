@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import TYPE_CHECKING, ClassVar, Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import (
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 class Account(Base):
     """Store account information."""
 
-    __tablename__: ClassVar[str] = "accounts"
+    __tablename__ = "accounts"
 
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)

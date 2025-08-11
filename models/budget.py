@@ -1,5 +1,5 @@
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any, ClassVar, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import ForeignKey, String, literal, or_
 from sqlalchemy.orm import (
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 class Budget(Base):
     """Store budget information."""
 
-    __tablename__: ClassVar[str] = "budgets"
+    __tablename__ = "budgets"
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     user_id: Mapped[str] = mapped_column(
         String(120), ForeignKey("users.id"), nullable=False
@@ -98,8 +98,8 @@ class Budget(Base):
 
     def calculate_spent_amount(self):
         """Calculate spent amount in budget's category during the period."""
-        from database import db # noqa: PLC0415
-        from models import Category, CategorySplit, Expense # noqa: PLC0415
+        from database import db  # noqa: PLC0415
+        from models import Category, CategorySplit, Expense  # noqa: PLC0415
 
         start_date: datetime
         end_date: datetime
@@ -233,6 +233,6 @@ class Budget(Base):
         percentage = self.get_progress_percentage()
         if percentage >= 100:  # noqa: PLR2004
             return "over"
-        if percentage >= 80: # noqa: PLR2004
+        if percentage >= 80:  # noqa: PLR2004
             return "approaching"
         return "under"
