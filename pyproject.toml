@@ -89,6 +89,7 @@ ignore = [
     "E117",
     "D206",
     "D300",
+    "PLR2004",
     "Q",
     "COM812",
     "COM819",
@@ -104,6 +105,4 @@ ignore = [
 testpaths = ["tests"]
 
 [dependency-groups]
-dev = [
-    "ipython>=9.4.0",
-]
+dev = ["ipython>=9.4.0"]

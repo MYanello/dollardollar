@@ -231,8 +231,8 @@ class Budget(Base):
     def get_status(self):
         """Return the budget status: 'under', 'approaching', 'over'."""
         percentage = self.get_progress_percentage()
-        if percentage >= 100:  # noqa: PLR2004
+        if percentage >= 100:
             return "over"
-        if percentage >= 80:  # noqa: PLR2004
+        if percentage >= 80:
             return "approaching"
         return "under"
