@@ -35,9 +35,9 @@ from services.extensions import init_db, login_manager, mail, migrate, scheduler
 from services.helpers import init_default_currencies
 from services.oidc.oidc_auth import register_oidc_routes, setup_oidc_config
 from services.oidc.oidc_user import extend_user_model
+from services.simplefin_client import SimpleFin
 from services.util import check_db_structure, detect_internal_transfer
 from session_timeout import DemoTimeout
-from simplefin_client import SimpleFin
 
 # Development user credentials from environment
 DEV_USER_EMAIL = os.getenv("DEV_USER_EMAIL", "dev@example.com")
@@ -748,7 +748,7 @@ def update_currency_rates() -> int:
             f"https://api.frankfurter.app/latest?from={base_code}", timeout=10
         )
 
-        if response.status_code != 200:  # noqa: PLR2004
+        if response.status_code != 200:
             app.logger.error(
                 "API request failed with status code %s", response.status_code
             )
@@ -1098,7 +1098,7 @@ def utility_processor():
 
         # Ensure the color is not too light
         brightness = (r * 299 + g * 587 + b * 114) / 1000
-        if brightness > 180:  # noqa: PLR2004
+        if brightness > 180:
             # If too bright, darken the color
             r = min(r * 0.7, 255)
             g = min(g * 0.7, 255)

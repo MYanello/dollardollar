@@ -1,6 +1,7 @@
 import base64
 from datetime import UTC, datetime
 
+import simplefin_client
 from flask import (
     Blueprint,
     current_app,
@@ -14,11 +15,10 @@ from flask import (
 )
 from flask_login import current_user
 
-import simplefin_client
 from database import db
 from models import Account, Expense, User
+from services.simplefin_client import SimpleFin
 from services.wrappers import login_required_dev
-from simplefin_client import SimpleFin
 
 simplefin_bp = Blueprint("simplefin", __name__)
 
