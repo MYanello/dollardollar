@@ -27,7 +27,7 @@ from models import (
 )
 from services.defaults import create_default_categories
 from services.helpers import reset_demo_data
-from session_timeout import DemoTimeout
+from services.session_timeout import DemoTimeout
 
 demo_bp = Blueprint("demo", __name__)
 

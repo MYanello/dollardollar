@@ -35,9 +35,9 @@ from services.extensions import init_db, login_manager, mail, migrate, scheduler
 from services.helpers import init_default_currencies
 from services.oidc.oidc_auth import register_oidc_routes, setup_oidc_config
 from services.oidc.oidc_user import extend_user_model
+from services.session_timeout import DemoTimeout
 from services.simplefin_client import SimpleFin
 from services.util import check_db_structure, detect_internal_transfer
-from session_timeout import DemoTimeout
 
 # Development user credentials from environment
 DEV_USER_EMAIL = os.getenv("DEV_USER_EMAIL", "dev@example.com")

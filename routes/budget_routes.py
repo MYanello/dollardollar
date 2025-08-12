@@ -19,8 +19,8 @@ from werkzeug import Response
 from database import db
 from models import Budget, Category, CategorySplit, Expense
 from services.helpers import calculate_category_spending, get_base_currency
+from services.session_timeout import demo_time_limited
 from services.wrappers import login_required_dev
-from session_timeout import demo_time_limited
 
 budget_bp = Blueprint("budget", __name__)
 
@@ -578,7 +578,7 @@ def budget_trends_data() -> tuple[Response, int]:  # noqa: PLR0915
                 tzinfo=UTC
             )
             month_start: datetime = month_date.replace(day=1)
-            if month_date.month == 12:  # noqa: PLR2004
+            if month_date.month == 12:
                 month_end: datetime = month_date.replace(
                     year=month_date.year + 1, month=1, day=1
                 ) - timedelta(days=1)
@@ -822,7 +822,7 @@ def budget_trends_data() -> tuple[Response, int]:  # noqa: PLR0915
         for _, month in enumerate(response["labels"]):
             month_date = datetime.strptime(month, "%b %Y").replace(tzinfo=UTC)
             month_start = month_date.replace(day=1)
-            if month_date.month == 12:  # noqa: PLR2004
+            if month_date.month == 12:
                 month_end = month_date.replace(
                     year=month_date.year + 1, month=1, day=1
                 ) - timedelta(days=1)

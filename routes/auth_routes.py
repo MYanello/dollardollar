@@ -26,8 +26,8 @@ from services.helpers import (
     sync_simplefin_for_user,
 )
 from services.recurring_detection import detect_recurring_transactions
+from services.session_timeout import DemoTimeout
 from services.wrappers import login_required_dev, restrict_demo_access
-from session_timeout import DemoTimeout
 
 auth_bp = Blueprint("auth", __name__)
 

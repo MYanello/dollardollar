@@ -14,9 +14,9 @@ from services.helpers import (
     get_budget_summary,
     get_category_spending,
 )
-from services.wrappers import login_required_dev
-from session_timeout import demo_time_limited
+from services.session_timeout import demo_time_limited
 from services.tables import group_users
+from services.wrappers import login_required_dev
 
 dashboard_bp = Blueprint("dashboard", __name__)
 

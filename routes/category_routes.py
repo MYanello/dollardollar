@@ -34,8 +34,8 @@ from services.defaults import (
     create_default_category_mappings,
 )
 from services.helpers import auto_categorize_transaction
+from services.session_timeout import demo_time_limited
 from services.wrappers import login_required_dev
-from session_timeout import demo_time_limited
 
 category_bp = Blueprint("category", __name__)
 
@@ -415,7 +415,7 @@ def learn_from_transaction_history():
         patterns[key]["transactions"].append(transaction.id)
 
     # Find significant patterns (occurred at least 3 times)
-    significant_patterns = [p for p in patterns.values() if p["count"] >= 3]  # noqa: PLR2004
+    significant_patterns = [p for p in patterns.values() if p["count"] >= 3]
 
     # Sort by frequency
     significant_patterns.sort(key=lambda x: x["count"], reverse=True)
@@ -708,7 +708,7 @@ def has_default_categories(user_id):
     )
 
     # If they have at least 4 of these categories, assume defaults were created
-    return match_count >= 4  # noqa: PLR2004
+    return match_count >= 4
 
 
 @category_bp.route("/categories/create_defaults", methods=["POST"])
@@ -1077,7 +1077,7 @@ def extract_keywords(description):
         "at",
         "of",
     }
-    filtered_words = [w for w in words if w not in stop_words and len(w) > 2]  # noqa: PLR2004
+    filtered_words = [w for w in words if w not in stop_words and len(w) > 2]
 
     if not filtered_words:
         # If no good words remain, use the longest word from the original

@@ -7,7 +7,7 @@ from flask_login import current_user, login_required, login_user
 from database import db
 from models import User
 from services.const import DEV_USER_EMAIL, DEV_USER_PASSWORD
-from session_timeout import DemoTimeout
+from services.session_timeout import DemoTimeout
 
 
 def login_required_dev(f):

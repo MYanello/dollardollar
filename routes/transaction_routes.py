@@ -18,9 +18,9 @@ from models import (
     User,
 )
 from services.helpers import get_base_currency
+from services.session_timeout import demo_time_limited
 from services.tables import group_users
 from services.wrappers import login_required_dev
-from session_timeout import demo_time_limited
 
 transaction_bp = Blueprint("transaction", __name__)
 

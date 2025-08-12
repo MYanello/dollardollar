@@ -12,7 +12,7 @@ and creating a new empty one with the current schema.
 
 
 def reset_database():
-    """Delete existing database and create a new empty one with the current schema."""
+    """Delete existing database and create a new one with the current schema."""
     try:
         print("Starting database reset...")
 
@@ -31,7 +31,8 @@ def reset_database():
 
         print("\nDatabase has been successfully reset!")
         print(
-            "The database is now empty. The first user to sign up will automatically become an admin."
+            "The database is now empty. The first user to sign up"
+            "will automatically become an admin."
         )
 
     except Exception as e:
