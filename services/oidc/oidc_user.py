@@ -103,7 +103,7 @@ def extend_user_model(db, User):
             user.set_password(random_password)
 
             # Generate user color based on email
-            hash_object = hashlib.md5(user.id.encode())
+            hash_object = hashlib.md5(user.id.encode())  # noqa: S324
             hash_hex = hash_object.hexdigest()
             r = int(hash_hex[:2], 16)
             g = int(hash_hex[2:4], 16)

@@ -79,6 +79,7 @@ class GoCardlessClient:
                     "Content-Type": "application/json",
                     "accept": "application/json",
                 },
+                timeout=10,
             )
             response: dict[str, Any] = resp.json()
             if "access" in response:
@@ -98,6 +99,7 @@ class GoCardlessClient:
                     "Authorization": f"Bearer {access_token}",
                     "accept": "application/json",
                 },
+                timeout=10,
             )
             return resp.json()
         except requests.exceptions.JSONDecodeError:
@@ -140,6 +142,7 @@ class GoCardlessClient:
                     "access_valid_for_days": access_valid_for_days,
                     "access_scope": access_scope,
                 },
+                timeout=10,
             )
             print(resp.text)
             return resp.json()
@@ -164,6 +167,7 @@ class GoCardlessClient:
                     "redirect": redirect_url,
                     "agreement": agreement,
                 },
+                timeout=10,
             )
             print(resp.text)
             return resp.json()
@@ -182,6 +186,7 @@ class GoCardlessClient:
                     "Authorization": f"Bearer {access_token}",
                     "accept": "application/json",
                 },
+                timeout=10,
             )
             return resp.json()
         except requests.exceptions.JSONDecodeError:
@@ -217,6 +222,7 @@ class GoCardlessClient:
                     "Authorization": f"Bearer {access_token}",
                     "accept": "application/json",
                 },
+                timeout=10,
             )
             return resp.json()
         except requests.exceptions.JSONDecodeError:
@@ -236,6 +242,7 @@ class GoCardlessClient:
                     "Authorization": f"Bearer {access_token}",
                     "accept": "application/json",
                 },
+                timeout=10,
             )
             return resp.json()
         except requests.exceptions.JSONDecodeError:
@@ -256,6 +263,7 @@ class GoCardlessClient:
                     "Authorization": f"Bearer {access_token}",
                     "accept": "application/json",
                 },
+                timeout=10,
             )
             return resp.json()
         except requests.exceptions.JSONDecodeError:
@@ -276,6 +284,7 @@ class GoCardlessClient:
                     "Authorization": f"Bearer {access_token}",
                     "accept": "application/json",
                 },
+                timeout=10,
             )
             return resp.json()
         except requests.exceptions.JSONDecodeError:
@@ -295,6 +304,7 @@ class GoCardlessClient:
                     "Authorization": f"Bearer {access_token}",
                     "accept": "application/json",
                 },
+                timeout=10,
             )
             return resp.json()
         except requests.exceptions.JSONDecodeError:
@@ -375,8 +385,8 @@ class GoCardlessClient:
                         transaction_type = "income"
                     else:
                         return None, False  # Skip zero-amount transactions
-            except Exception as e:
-                self.app.logger.error(f"Error in transfer detection: {e!s}")
+            except Exception:
+                self.app.logger.exception("Error in transfer detection")
                 is_transfer = False
                 transaction_type = trans_data.get("transaction_type", "expense")
         else:
@@ -412,13 +422,12 @@ class GoCardlessClient:
                     category_id = auto_categorize_func(
                         trans_data.get("description", ""), db_account.user_id
                     )
-                except Exception as e:
-                    self.app.logger.error(
-                        f"Error in auto-categorization: {e!s}"
-                    )
+                except Exception:
+                    self.app.logger.exception("Error in auto-categorization")
 
-            # If auto-categorization didn't find a match but SimpleFin provided a category name,
-            # try to find or create a matching category
+            # If auto-categorization didn't find a match but SimpleFin
+            # provided a category name, try to find or
+            # create a matching category
             if (
                 not category_id
                 and trans_data.get("category_name")
@@ -430,8 +439,8 @@ class GoCardlessClient:
                         trans_data.get("description"),
                         db_account.user_id,
                     )
-                except Exception as e:
-                    self.app.logger.error(f"Error in category lookup: {e!s}")
+                except Exception:
+                    self.app.logger.exception("Error in category lookup")
 
             # Set the category if we found one
             if category_id:

@@ -11,15 +11,13 @@ from database import db
 def detect_recurring_transactions(user_id, lookback_days=60, min_occurrences=2):
     """Detect potential recurring transactions based on transaction history.
 
-    Parameters
-    ----------
-    - user_id: The user ID to detect recurring transactions for
-    - lookback_days: Number of days to look back for transaction history (default: 60)
-    - min_occurrences: Minimum number of occurrences to consider a transaction recurring (default: 2)
+    Args:
+      user_id: The user ID to detect recurring transactions for
+      lookback_days: Days to look back for transaction history
+      min_occurrences: Minimum occurrences to consider a transaction recurring
 
-    Returns
-    -------
-    - A list of potential recurring transactions with metadata
+    Returns:
+      A list of potential recurring transactions with metadata
 
     """
     # Calculate start date for analysis period
@@ -36,7 +34,7 @@ def detect_recurring_transactions(user_id, lookback_days=60, min_occurrences=2):
                     Expense.user_id == user_id,
                     Expense.date >= start_date,
                     Expense.date <= end_date,
-                    # Exclude transactions that are already from recurring sources
+                    # Exclude transactions that are from recurring sources
                     Expense.recurring_id.is_(None),
                 )
             )
@@ -220,17 +218,15 @@ def calculate_next_occurrence(last_date, frequency):  # noqa: PLR0911
 def create_recurring_expense_from_detection(
     user_id, candidate, start_date=None
 ):
-    """Create a RecurringExpense from a detected candidate
+    """Create a RecurringExpense from a detected candidate.
 
-    Parameters
-    ----------
-    - user_id: User ID to create the recurring expense for
-    - candidate: The detected recurring candidate dict
-    - start_date: Optional start date (defaults to today)
+    Args:
+      user_id: User ID to create the recurring expense for
+      candidate: The detected recurring candidate dict
+      start_date: Optional start date (defaults to today)
 
-    Returns
-    -------
-    - The created RecurringExpense object
+    Returns:
+      The created RecurringExpense object
 
     """
     if start_date is None:
@@ -240,7 +236,7 @@ def create_recurring_expense_from_detection(
     return RecurringExpense(
         description=candidate["description"],
         amount=candidate["amount"],
-        card_used="Auto-detected",  # This will be replaced by account name in the form
+        card_used="Auto-detected",  # This will be replaced by account name
         split_method="equal",  # Default for auto-detected
         paid_by=user_id,
         user_id=user_id,

@@ -57,7 +57,7 @@ def is_oidc_enabled():
 
 
 def setup_oidc_config(app):  # noqa: PLR0915
-    """Configure OIDC settings from environment variables using discovery endpoint."""
+    """Config OIDC settings from env vars with discovery endpoint."""
     oidc_enabled = os.getenv("OIDC_ENABLED", "False").lower() == "true"
 
     # Configure LOCAL_LOGIN_DISABLE regardless of OIDC status
@@ -115,17 +115,21 @@ def setup_oidc_config(app):  # noqa: PLR0915
                     app.logger.info(
                         "OIDC configuration loaded from discovery endpoint"
                     )
-                    app.logger.debug(f"  Auth: {app.config['OIDC_AUTH_URI']}")
-                    app.logger.debug(f"  Token: {app.config['OIDC_TOKEN_URI']}")
+                    app.logger.debug("  Auth: %s", app.config["OIDC_AUTH_URI"])
                     app.logger.debug(
-                        f"  Userinfo: {app.config['OIDC_USERINFO_URI']}"
+                        "  Token: %s", app.config["OIDC_TOKEN_URI"]
                     )
                     app.logger.debug(
-                        f"  Logout: {app.config['OIDC_LOGOUT_URI']}"
+                        "  Userinfo: %s", app.config["OIDC_USERINFO_URI"]
+                    )
+                    app.logger.debug(
+                        "  Logout: %s", app.config["OIDC_LOGOUT_URI"]
                     )
                 else:
                     app.logger.error(
-                        f"Failed to fetch OIDC configuration from {discovery_url}: {response.status_code}"
+                        "Failed to fetch OIDC configuration from %s: %s",
+                        discovery_url,
+                        response.status_code,
                     )
             except Exception:
                 app.logger.exception("Error loading OIDC discovery document")
@@ -135,25 +139,28 @@ def setup_oidc_config(app):  # noqa: PLR0915
         if not app.config.get("OIDC_AUTH_URI"):
             app.config["OIDC_AUTH_URI"] = os.getenv("OIDC_AUTH_URI")
             app.logger.info(
-                f"Using manually configured Auth URI: {app.config['OIDC_AUTH_URI']}"
+                "Using manually configured Auth URI: %s",
+                app.config["OIDC_AUTH_URI"],
             )
 
         if not app.config.get("OIDC_TOKEN_URI"):
             app.config["OIDC_TOKEN_URI"] = os.getenv("OIDC_TOKEN_URI")
             app.logger.info(
-                f"Using manually configured Token URI: {app.config['OIDC_TOKEN_URI']}"
+                "Using manually configured Token URI: %s",
+                app.config["OIDC_TOKEN_URI"],
             )
-
         if not app.config.get("OIDC_USERINFO_URI"):
             app.config["OIDC_USERINFO_URI"] = os.getenv("OIDC_USERINFO_URI")
             app.logger.info(
-                f"Using manually configured Userinfo URI: {app.config['OIDC_USERINFO_URI']}"
+                "Using manually configured Userinfo URI: %s",
+                app.config["OIDC_USERINFO_URI"],
             )
 
         if not app.config.get("OIDC_LOGOUT_URI"):
             app.config["OIDC_LOGOUT_URI"] = os.getenv("OIDC_LOGOUT_URI")
             app.logger.info(
-                f"Using manually configured Logout URI: {app.config['OIDC_LOGOUT_URI']}"
+                "Using manually configured Logout URI: %s",
+                app.config["OIDC_LOGOUT_URI"],
             )
 
         if not app.config.get("OIDC_ISSUER"):
@@ -176,14 +183,16 @@ def setup_oidc_config(app):  # noqa: PLR0915
 
         if missing_endpoints:
             app.logger.error(
-                f"Missing required OIDC endpoints: {', '.join(missing_endpoints)}"
+                "Missing required OIDC endpoints: %s",
+                ", ".join(missing_endpoints),
             )
             app.logger.error(
                 "OIDC authentication will not work properly without these endpoints"
             )
 
         app.logger.info(
-            f"OIDC authentication is enabled using {app.config['OIDC_PROVIDER_NAME']}"
+            "OIDC authentication is enabled using %s",
+            app.config["OIDC_PROVIDER_NAME"],
         )
 
         # Log whether local login is disabled
@@ -198,7 +207,7 @@ def setup_oidc_config(app):  # noqa: PLR0915
     return oidc_enabled
 
 
-def register_oidc_routes(app, user, db):
+def register_oidc_routes(app, user, db):  # noqa: PLR0915
     """Register OIDC routes with the Flask application."""
 
     @app.route("/login/oidc")
@@ -255,7 +264,7 @@ def register_oidc_routes(app, user, db):
             return redirect(url_for("auth.login"))
 
     @app.route("/oidc/callback")
-    def oidc_callback():
+    def oidc_callback():  # noqa: PLR0911
         """Handle OIDC callback with proper security validation."""
         if not is_oidc_enabled():
             flash("OIDC authentication is not enabled.")
@@ -265,7 +274,7 @@ def register_oidc_routes(app, user, db):
             # Get the authorization code from the callback
             code = request.args.get("code")
             if not code:
-                raise ValueError("No authorization code received")
+                raise ValueError("No authorization code received")  # noqa: TRY003 TRY301
 
             # Verify state parameter to prevent CSRF
             callback_state = request.args.get("state")
@@ -327,7 +336,8 @@ def register_oidc_routes(app, user, db):
                     "Userinfo request failed: %s", userinfo_response.text
                 )
                 flash(
-                    "Authentication failed: Unable to retrieve user information."
+                    "Authentication failed: "
+                    "Unable to retrieve user information."
                 )
                 return redirect(url_for("auth.login"))
 
@@ -337,7 +347,8 @@ def register_oidc_routes(app, user, db):
             if "sub" not in user_info:
                 app.logger.error("Missing sub claim in OIDC userinfo")
                 flash(
-                    "Authentication failed: Incomplete user information received."
+                    "Authentication failed: "
+                    "Incomplete user information received."
                 )
                 return redirect(url_for("auth.login"))
 

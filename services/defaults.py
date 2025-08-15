@@ -253,7 +253,7 @@ def create_default_budgets(user_id):
         },
         {
             "name": "Monthly Subscriptions",
-            "category_type": "entertainment",  # Will use subcategory if available
+            "category_type": "entertainment",  # Will use subcategory if avail
             "amount": 50,
             "period": "monthly",
             "include_subcategories": False,

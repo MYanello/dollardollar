@@ -1,3 +1,4 @@
+import re
 from re import Pattern
 
 from flask import Flask, request
@@ -76,7 +77,8 @@ def detect_internal_transfer(description, amount, account_id=None):
 
 
 def auto_categorize_transaction(description: str, user_id) -> None | int:
-    """Automatically categorize a transaction based on its description
+    """Automatically categorize a transaction based on its description.
+
     Returns the best matching category ID or None if no match found
     """
     if not description:
@@ -104,8 +106,6 @@ def auto_categorize_transaction(description: str, user_id) -> None | int:
         if mapping.is_regex:
             # Use regex pattern matching
             try:
-                import re
-
                 pattern: Pattern[str] = re.compile(
                     mapping.keyword, re.IGNORECASE
                 )
@@ -157,7 +157,7 @@ def auto_categorize_transaction(description: str, user_id) -> None | int:
 def get_category_id(  # noqa: PLR0911
     category_name: str, description=None, user_id=None
 ) -> int | None:
-    """Find, create, or auto-suggest a category based on name and description."""
+    """Find, create or auto-suggest a category based on name and description."""
     # Clean the category name
     category_name = category_name.strip() if category_name else ""
 

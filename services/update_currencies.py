@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import requests
 from flask import current_app
@@ -9,6 +9,7 @@ from models import Currency
 """
 This script updates currency exchange rates in the application database.
 """
+
 
 def update_currency_rates() -> int:
     """Update currency exchange rates using a public API.
@@ -41,7 +42,7 @@ def update_currency_rates() -> int:
             current_app.logger.exception("API request failed")
             return -1
 
-        if response.status_code != 200:  # noqa: PLR2004
+        if response.status_code != 200:
             current_app.logger.error(
                 "API returned status code %d", response.status_code
             )
@@ -70,7 +71,7 @@ def update_currency_rates() -> int:
                 try:
                     # Convert the rate to base currency rate
                     currency.rate_to_base = 1 / rates[currency.code]
-                    currency.last_updated = datetime.now(timezone.utc)
+                    currency.last_updated = datetime.now(UTC)
                     updated_count += 1
 
                     current_app.logger.info(

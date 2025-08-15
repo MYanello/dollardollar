@@ -1,4 +1,6 @@
 import base64
+import logging
+import re
 from datetime import UTC, datetime, timedelta
 from logging import Logger
 
@@ -268,7 +270,7 @@ def calculate_balances(user_id):
     return [
         balance
         for balance in balances.values()
-        if abs(balance["amount"]) > 0.01  # noqa: PLR2004
+        if abs(balance["amount"]) > 0.01
     ]
 
 
@@ -337,7 +339,7 @@ def calculate_asset_debt_trends(current_user):
 
     # Get today's date and calculate a reasonable historical range
     # (last 12 months)
-    today = datetime.now()
+    today = datetime.now(UTC)
     twelve_months_ago = today - timedelta(days=365)
 
     # Get all accounts for the user
@@ -387,7 +389,7 @@ def calculate_asset_debt_trends(current_user):
         is_debt = account.type in ["credit"] or account.balance < 0
 
         # Skip accounts with zero or near-zero balance
-        if abs(account.balance or 0) < 0.01:  # noqa: PLR2004
+        if abs(account.balance or 0) < 0.01:
             continue
 
         # Get monthly transactions for this account
@@ -489,7 +491,9 @@ def calculate_asset_debt_trends(current_user):
 def detect_internal_transfer(description, amount, account_id=None):
     """Detect if a transaction appears to be an internal transfer.
 
-    :returns: a tuple of (is_transfer, source_account_id, destination_account_id)
+    Return:
+      a tuple of (is_transfer, source_account_id, destination_account_id)
+
     """
     # Default return values
     is_transfer = False
@@ -631,7 +635,8 @@ def get_category_id(category_name, description=None, user_id=None):  # noqa: PLR
 
             return new_category.id
 
-    # If we still don't have a category, try auto-categorization again with the description
+    # If we still don't have a category,
+    # try auto-categorization again with the description
     if description and user_id:
         # Try to auto-categorize based on description
         auto_category_id = auto_categorize_transaction(description, user_id)
@@ -672,8 +677,6 @@ def auto_categorize_transaction(description, user_id):
         if mapping.is_regex:
             # Use regex pattern matching
             try:
-                import re
-
                 pattern = re.compile(mapping.keyword, re.IGNORECASE)
                 if pattern.search(description):
                     matched = True
@@ -807,9 +810,7 @@ def send_welcome_email(user):
 
 
 def reset_demo_data(user_id):
-    """Reset all demo data for a user with comprehensive relationship handling."""
-    import logging
-
+    """Reset demo data for a user with comprehensive relationship handling."""
     logger: Logger = logging.getLogger(__name__)
     logger.info("Resetting demo data for user %s", {user_id})
 
@@ -1002,7 +1003,7 @@ def sync_simplefin_for_user(user_id):
 
                     # Update account details
                     account.balance = sf_account.get("balance", account.balance)
-                    account.last_sync = datetime.now(tz.utc)
+                    account.last_sync = datetime.now(UTC)
                     accounts_updated += 1
 
                     # Create transaction objects
@@ -1040,11 +1041,12 @@ def sync_simplefin_for_user(user_id):
                                 and transaction.destination_account_id
                             ):
                                 # Find the destination account
-                                to_account = Account.query.get(
+                                to_account = db.session.query(Account).get(
                                     transaction.destination_account_id
                                 )
                                 if to_account and to_account.user_id == user_id:
-                                    # For transfers, add to destination account balance
+                                    # For transfers,
+                                    # add to destination account balance
                                     to_account.balance += transaction.amount
 
             # Commit changes for this user
@@ -1052,11 +1054,12 @@ def sync_simplefin_for_user(user_id):
                 db.session.commit()
 
                 # Update the SimpleFin settings last_sync time
-                settings.last_sync = datetime.now(tz.utc)
+                settings.last_sync = datetime.now(UTC)
                 db.session.commit()
 
                 current_app.logger.info(
-                    f"SimpleFin sync on login for user {user_id}: {accounts_updated} accounts updated, {transactions_added} transactions added"
+                    f"SimpleFin sync on login for user {user_id}: {accounts_updated} "
+                    "accounts updated, {transactions_added} transactions added"
                 )
 
         except Exception:
@@ -1067,15 +1070,16 @@ def sync_simplefin_for_user(user_id):
 def calculate_category_spending(
     category_id, start_date, end_date, include_subcategories=True
 ):
-    """Calculate total spending for a category within a date range"""
+    """Calculate total spending for a category within a date range."""
     # Get the category
-    category = Category.query.get(category_id)
+    category = db.session.query(Category).get(category_id)
     if not category:
         return 0
 
     total_spent = 0
 
-    # 1. Get direct expenses (transactions directly assigned to this category without splits)
+    # 1. Get direct expenses
+    # (transactions directly assigned to this category without splits)
     direct_expenses = (
         db.session.query(Expense)
         .filter(
@@ -1091,13 +1095,15 @@ def calculate_category_spending(
 
     # Add up direct expenses
     for expense in direct_expenses:
-        # Use amount_base if available (for currency conversion), otherwise use amount
+        # Use amount_base if available (for currency conversion),
+        # otherwise use amount
         amount = getattr(expense, "amount_base", expense.amount)
         total_spent += amount
 
     # 2. Get category splits assigned to this category
     category_splits = (
-        CategorySplit.query.join(Expense)
+        db.session.query(CategorySplit)
+        .join(Expense)
         .filter(
             Expense.user_id == current_user.id,
             CategorySplit.category_id == category_id,
@@ -1109,7 +1115,8 @@ def calculate_category_spending(
 
     # Add up split amounts
     for split in category_splits:
-        # Use split amount directly - these should already be in the correct currency
+        # Use split amount directly
+        # these should already be in the correct currency
         total_spent += split.amount
 
     # 3. Include subcategories if requested and if this is a parent category
@@ -1137,7 +1144,8 @@ def calculate_category_spending(
 
             # Process split expenses
             subcat_splits = (
-                CategorySplit.query.join(Expense)
+                db.session.query(CategorySplit)
+                .join(Expense)
                 .filter(
                     Expense.user_id == current_user.id,
                     CategorySplit.category_id == subcategory_id,
@@ -1154,7 +1162,7 @@ def calculate_category_spending(
 
 
 def init_default_currencies():
-    """Initialize the default currencies in the database"""
+    """Initialize the default currencies in the database."""
     # Check if any currencies exist
     if len(db.session.query(Currency).all()) == 0:
         # Add USD as base currency
