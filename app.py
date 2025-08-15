@@ -36,8 +36,7 @@ from services.helpers import init_default_currencies
 from services.oidc.oidc_auth import register_oidc_routes, setup_oidc_config
 from services.oidc.oidc_user import extend_user_model
 from services.session_timeout import DemoTimeout
-
-# from services.simplefin_client import SimpleFin
+from services.simplefin_client import SimpleFin
 from services.util import (
     check_db_structure,
     detect_internal_transfer,
@@ -137,7 +136,7 @@ logging.basicConfig(level=getattr(logging, app.config["LOG_LEVEL"]))
 
 scheduler.start()
 
-#simplefin_client = SimpleFin(app)
+simplefin_client = SimpleFin(app)
 
 oidc_enabled = setup_oidc_config(app)
 
