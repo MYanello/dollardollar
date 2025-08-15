@@ -26,7 +26,7 @@ class SimpleFinSettings(Base):
     sync_frequency: Mapped[str] = mapped_column(
         String(20), default="daily"
     )  # 'daily', 'weekly', etc.
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
         default=datetime.now(UTC), onupdate=datetime.now(UTC)
     )

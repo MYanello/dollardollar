@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 
 import simplefin_client
 from flask import (
-    Blueprint,
     current_app,
     flash,
     jsonify,
@@ -19,8 +18,6 @@ from database import db
 from models import Account, Expense, User
 from services.simplefin_client import SimpleFin
 from services.wrappers import login_required_dev
-
-simplefin_bp = Blueprint("simplefin", __name__)
 
 
 @simplefin_bp.route("/connect_simplefin")

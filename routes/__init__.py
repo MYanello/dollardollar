@@ -16,7 +16,8 @@ from routes.password_reset_routes import password_bp
 from routes.recurring_routes import recurring_bp
 from routes.report_routes import report_bp
 from routes.settlement_routes import settlement_bp
-from routes.simplefin_routes import simplefin_bp
+
+# from routes.simplefin_routes import simplefin_bp
 from routes.stat_routes import stat_bp
 from routes.tag_routes import tag_bp
 from routes.timezone_routes import timezone_bp
@@ -40,7 +41,7 @@ def register_blueprints(app: Flask):
     app.register_blueprint(settlement_bp)
     app.register_blueprint(currency_bp)
     app.register_blueprint(transaction_bp)
-    app.register_blueprint(simplefin_bp)
+    # app.register_blueprint(simplefin_bp)
     app.register_blueprint(demo_bp)
     app.register_blueprint(timezone_bp)
     app.register_blueprint(user_bp)
