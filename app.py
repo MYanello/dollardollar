@@ -37,7 +37,13 @@ from services.oidc.oidc_auth import register_oidc_routes, setup_oidc_config
 from services.oidc.oidc_user import extend_user_model
 from services.session_timeout import DemoTimeout
 from services.simplefin_client import SimpleFin
-from services.util import check_db_structure, detect_internal_transfer
+from services.util import (
+    check_db_structure,
+    detect_internal_transfer,
+    get_category_name,
+    normalize_time_series,
+    process_daily_spending,
+)
 
 # Development user credentials from environment
 DEV_USER_EMAIL = os.getenv("DEV_USER_EMAIL", "dev@example.com")
@@ -96,7 +102,7 @@ app.config["GOCARDLESS_ENABLED"] = (
 
 # Email configuration from environment variables
 app.config["MAIL_SERVER"] = os.getenv("MAIL_SERVER", "smtp.gmail.com")
-app.config["MAIL_PORT"] = int(os.getenv("MAIL_PORT", 587))
+app.config["MAIL_PORT"] = int(os.getenv("MAIL_PORT", "587"))
 app.config["MAIL_USE_TLS"] = os.getenv("MAIL_USE_TLS", "True").lower() == "true"
 app.config["MAIL_USE_SSL"] = (
     os.getenv("MAIL_USE_SSL", "False").lower() == "true"
@@ -163,7 +169,7 @@ def calculate_asset_debt_trends(current_user):
     monthly_assets = {}
     monthly_debts = {}
 
-    # Get today's date and calculate a reasonable historical range (last 12 months)
+    # Get today's date and calculate a reasonable historical range
     today = datetime.now(tz=UTC)
     twelve_months_ago = today - timedelta(days=365)
 
@@ -723,7 +729,8 @@ def create_default_category_mappings(user_id):
         app.logger.exception("Error creating default category mappings")
 
 
-# Then modify the existing create_default_categories function to also create mappings:
+# Then modify the existing create_default_categories
+# function to also create mappings:
 
 
 def update_currency_rates() -> int:
@@ -919,7 +926,7 @@ def calculate_iou_data(expenses, users):
                 0,
             )
 
-            if payer_id not in iou_data["i_owe"]:
+            if payer_id not in iou_data["i_owe"] and payer:
                 iou_data["i_owe"][payer_id] = {"name": payer.name, "amount": 0}
             iou_data["i_owe"][payer_id]["amount"] += current_user_split
 
@@ -1199,12 +1206,6 @@ def utility_processor():
         "get_budget_status_for_category": get_budget_status_for_category,
         "get_account_by_id": get_account_by_id,
     }
-
-
-# Add to utility_processor to make budget info available in templates
-@app.context_processor
-def utility_processor():
-    # Previous utility functions...
 
     def get_budget_status_for_category(category_id):
         """Get budget status for a specific category."""
